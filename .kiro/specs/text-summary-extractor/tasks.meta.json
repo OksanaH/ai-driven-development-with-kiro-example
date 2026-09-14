@@ -1,0 +1,242 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Set up project structure and shared types": [
+      {
+        "executionId": "e51dcf45-089e-4f59-884c-513ca92d1427",
+        "chatSessionId": "sess_7f897e9d-9a3c-4265-a979-915588e7321b",
+        "timestamp": 1789411913655
+      },
+      {
+        "executionId": "e51dcf45-089e-4f59-884c-513ca92d1427",
+        "chatSessionId": "sess_7f897e9d-9a3c-4265-a979-915588e7321b",
+        "timestamp": 1789412224126
+      }
+    ],
+    "2. Implement configuration resolution": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412291643
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412304271
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412547070
+      }
+    ],
+    "3.1 Implement extension classification and path checks in `src/inputHandler.ts`": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412291935
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412305628
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412548467
+      }
+    ],
+    "3.2 Implement text-document size enforcement": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412292193
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412552969
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412736036
+      }
+    ],
+    "3.3 Implement archive enumeration, exclusion, and size enforcement": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412292392
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412554417
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412841585
+      }
+    ],
+    "4. Checkpoint - validate input handling": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412292567
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412996305
+      }
+    ],
+    "5. Implement text document reading": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412292753
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412556718
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412737708
+      }
+    ],
+    "6.1 Implement per-image Textract calls with retry in `src/ocrExtractor.ts`": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412293050
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413009375
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413230382
+      }
+    ],
+    "6.2 Aggregate extracted text and enforce non-empty result": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412293375
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413236001
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413402123
+      }
+    ],
+    "7. Implement summarization": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412293630
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413236965
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413403029
+      }
+    ],
+    "8. Implement result reporting": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412293888
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412557162
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412738539
+      }
+    ],
+    "9. Implement pipeline orchestration": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412294154
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413407411
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413498589
+      }
+    ],
+    "10. Implement CLI entry point and wire everything together": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412294464
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413503067
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413601588
+      }
+    ],
+    "11. Final checkpoint - end-to-end wiring": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412294721
+      },
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413736695
+      }
+    ],
+    "3. Implement input classification and validation": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789412841866
+      }
+    ],
+    "6. Implement OCR extraction from archive images": [
+      {
+        "executionId": "72d9087d-0219-4686-a4d0-5fef654996ab",
+        "chatSessionId": "sess_d303fd00-39f7-447e-a965-1ffe20ca482e",
+        "timestamp": 1789413402266
+      }
+    ]
+  }
+}
