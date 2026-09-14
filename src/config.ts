@@ -17,6 +17,8 @@ export interface Config {
   bedrockModelId: string;
   /** AWS region for the Textract and Bedrock clients. */
   awsRegion: string;
+  /** HTTP port the local Web_Server listens on. Default 3000. */
+  httpPort: number;
 }
 
 /** Default Max_Input_Size: 10 MB. */
@@ -31,6 +33,7 @@ const DEFAULT_MAX_SUMMARIZER_INPUT_BYTES = 100_000;
 const DEFAULT_SUMMARIZER_TIMEOUT_MS = 30_000;
 const DEFAULT_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0";
 const DEFAULT_AWS_REGION = "us-east-1";
+const DEFAULT_HTTP_PORT = 3000;
 
 /**
  * Resolve the Max_Input_Size from an environment value, clamping to the
@@ -65,5 +68,6 @@ export function resolveConfig(env: NodeJS.ProcessEnv = process.env): Config {
       Number(env.SUMMARIZER_TIMEOUT_MS) || DEFAULT_SUMMARIZER_TIMEOUT_MS,
     bedrockModelId: env.BEDROCK_MODEL_ID || DEFAULT_BEDROCK_MODEL_ID,
     awsRegion: env.AWS_REGION || DEFAULT_AWS_REGION,
+    httpPort: Number(env.HTTP_PORT || env.PORT) || DEFAULT_HTTP_PORT,
   };
 }

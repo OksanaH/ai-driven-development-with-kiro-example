@@ -1,21 +1,25 @@
 /**
  * Summarization stage.
  *
- * Sends the extracted text to Amazon Bedrock and returns a concise summary.
- * The stage guards against empty input, truncates oversized input to a
- * configurable byte ceiling, and races the Bedrock call against a configurable
- * timeout so a slow or failing service never blocks the run indefinitely.
+ * The `Summarizer` is defined as an interface so the mock implementation used
+ * by this POC can be swapped for a real Amazon Bedrock implementation later
+ * without changing any caller (5.3). `MockSummarizer` produces a deterministic
+ * placeholder summary derived only from the input text, with no AWS call (5.4).
+ *
+ * `runSummarizer` wraps the interface with the cost-safety guards: it rejects
+ * empty input without invoking the summarizer (5.2), truncates oversized input
+ * to a configurable byte ceiling (5.6), and races the call against a
+ * configurable timeout (5.5) so the contract stays identical to a future
+ * networked implementation.
  */
-
-import {
-  BedrockRuntimeClient,
-  InvokeModelCommand,
-} from "@aws-sdk/client-bedrock-runtime";
 
 import type { Config } from "./config";
 import type { Result, StageError } from "./types";
 
 const STAGE = "summarization" as const;
+
+/** Character ceiling for the placeholder's first-sentence fragment. */
+const FIRST_SENTENCE_MAX_CHARS = 150;
 
 function summarizationError(message: string): Result<string, StageError> {
   return { ok: false, error: { stage: STAGE, message } };
@@ -36,37 +40,62 @@ function truncateToBytes(text: string, maxBytes: number): string {
 }
 
 /**
- * Build the Anthropic Claude messages-format request body for a summarization
- * prompt over the given text.
+ * The Summarizer contract. A single method turns text into a summary.
+ *
+ * Defined as an interface so the mock can be replaced by a real Bedrock
+ * implementation without changing the callers (5.3).
  */
-function buildRequestBody(text: string): string {
-  return JSON.stringify({
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: `Summarize the following text concisely:\n\n${text}`,
-      },
-    ],
-  });
+export interface Summarizer {
+  summarize(text: string): Promise<string>;
 }
 
 /**
- * Invoke Bedrock and return the summary text, racing the call against the
- * configured timeout.
+ * A local, deterministic Summarizer that never calls AWS (5.4).
+ *
+ * The placeholder is derived only from the input text: it reports the word
+ * count and the first sentence (the text up to the first period, or the first
+ * ~150 characters when there is no period). The same input always yields the
+ * same output.
  */
-async function invokeBedrock(
+export class MockSummarizer implements Summarizer {
+  async summarize(text: string): Promise<string> {
+    const trimmed = text.trim();
+    const wordCount = trimmed.split(/\s+/).filter((w) => w.length > 0).length;
+
+    const periodIndex = trimmed.indexOf(".");
+    const firstSentence =
+      periodIndex >= 0
+        ? trimmed.slice(0, periodIndex)
+        : trimmed.slice(0, FIRST_SENTENCE_MAX_CHARS);
+
+    return `Summary (${wordCount} words): ${firstSentence}…`;
+  }
+}
+
+/**
+ * Summarize the extracted text using the given `Summarizer`.
+ *
+ * - If `text` is empty or whitespace-only, return a "no text to summarize"
+ *   error without invoking the summarizer (5.2).
+ * - If the UTF-8 byte length exceeds `Max_Summarizer_Input`, truncate to that
+ *   byte length before invoking (5.6).
+ * - Race the summarize call against the configured timeout; on error or
+ *   timeout return a "summarization failed" error (5.5); on success return the
+ *   summary (5.1).
+ */
+export async function runSummarizer(
   text: string,
-  config: Config,
-  bedrock: BedrockRuntimeClient
-): Promise<string> {
-  const command = new InvokeModelCommand({
-    modelId: config.bedrockModelId,
-    contentType: "application/json",
-    accept: "application/json",
-    body: buildRequestBody(text),
-  });
+  summarizer: Summarizer,
+  config: Config
+): Promise<Result<string, StageError>> {
+  // Guard: never invoke the summarizer on empty input (5.2).
+  if (text.trim().length === 0) {
+    return summarizationError("There is no text to summarize.");
+  }
+
+  // Truncate oversized input to the configured byte ceiling before the call
+  // so summarization cost stays bounded (5.6).
+  const input = truncateToBytes(text, config.maxSummarizerInputBytes);
 
   const timeout = new Promise<never>((_, reject) => {
     setTimeout(
@@ -75,39 +104,8 @@ async function invokeBedrock(
     );
   });
 
-  const response = await Promise.race([bedrock.send(command), timeout]);
-
-  const payload = JSON.parse(new TextDecoder().decode(response.body));
-  return payload.content[0].text;
-}
-
-/**
- * Summarize the extracted text.
- *
- * - If `text` is empty or whitespace-only, return a "no text to summarize"
- *   error without calling Bedrock (5.2).
- * - If the UTF-8 byte length exceeds `Max_Summarizer_Input`, truncate to that
- *   byte length before invoking Bedrock (5.5).
- * - Invoke Bedrock with a summarization prompt raced against the configured
- *   timeout; on error or timeout return a "summarization failed" error (5.4);
- *   on success return the summary text (5.1, 5.3).
- */
-export async function summarize(
-  text: string,
-  config: Config,
-  bedrock: BedrockRuntimeClient
-): Promise<Result<string, StageError>> {
-  // Guard: never spend a Bedrock call on empty input (5.2).
-  if (text.trim().length === 0) {
-    return summarizationError("There is no text to summarize.");
-  }
-
-  // Truncate oversized input to the configured byte ceiling before the call
-  // so summarization cost stays bounded (5.5).
-  const input = truncateToBytes(text, config.maxSummarizerInputBytes);
-
   try {
-    const summary = await invokeBedrock(input, config, bedrock);
+    const summary = await Promise.race([summarizer.summarize(input), timeout]);
     return { ok: true, value: summary };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);

@@ -1,27 +1,27 @@
 {
   "name": "text-summary-extractor",
   "version": "0.1.0",
-  "description": "Proof-of-concept CLI that summarizes a text document or a ZIP of images using Amazon Textract and Amazon Bedrock.",
+  "description": "Proof-of-concept local web app that summarizes a single uploaded .txt or JPEG file, reading text directly or via Amazon Textract OCR and producing a deterministic mock summary.",
   "type": "commonjs",
-  "main": "dist/cli.js",
+  "main": "dist/server.js",
   "bin": {
-    "text-summary-extractor": "dist/cli.js"
+    "text-summary-extractor": "dist/server.js"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/cli.js"
+    "serve": "node dist/server.js",
+    "start": "node dist/server.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
     "@aws-sdk/client-textract": "^3.700.0",
-    "adm-zip": "^0.5.16"
+    "busboy": "^1.6.0"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.7",
+    "@types/busboy": "^1.5.4",
     "@types/node": "^20.14.0",
     "typescript": "^5.5.0"
   }

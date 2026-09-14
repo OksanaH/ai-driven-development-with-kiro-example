@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and adjust as needed.
+# All values have defaults that mirror the original CDK app (bin/infra.ts),
+# so terraform.tfvars is optional.
+
+aws_region    = "us-east-1"
+function_name = "text-summary-extractor-web-app"
+
+# --- Application configuration ---
+max_input_size_bytes       = 10485760 # 10 MB
+max_summarizer_input_bytes = 100000
+summarizer_timeout_ms      = 30000
+bedrock_model_id           = "anthropic.claude-3-haiku-20240307-v1:0"
+grant_bedrock_invoke       = false
+
+# --- Cost guardrail ---
+# Set monthly_budget_usd = null to skip creating a budget.
+# Provide budget_alert_email to receive the 80% alert.
+monthly_budget_usd = 5
+# budget_alert_email = "you@example.com"

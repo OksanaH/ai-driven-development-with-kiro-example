@@ -2,7 +2,7 @@
  * Shared types for the Text Summary Extractor pipeline.
  *
  * The pipeline threads small result values through each stage rather than
- * throwing across boundaries, so the reporter can always name exactly one
+ * throwing across boundaries, so the endpoint can always name exactly one
  * failed stage.
  */
 
@@ -20,52 +20,23 @@ export type Result<T, E> =
   | { ok: true; value: T }
   | { ok: false; error: E };
 
-/** Outcome of classifying and validating the input file. */
-export type InputClassification =
-  | { kind: "text"; path: string }
-  | {
-      kind: "archive";
-      path: string;
-      images: ArchiveImage[];
-      excluded: ExcludedEntry[];
-    };
-
-/** A supported image extracted from an archive. */
-export interface ArchiveImage {
-  /** Entry name within the zip. */
-  name: string;
-  /** Uncompressed image bytes. */
+/** A single file uploaded through the frontend, held in memory. */
+export interface UploadedFile {
+  /** Original upload name; used only to read the extension. */
+  filename: string;
+  /** Raw file contents held in memory. */
   bytes: Uint8Array;
 }
 
-/** An archive entry excluded from OCR because its type is unsupported. */
-export interface ExcludedEntry {
-  name: string;
-  reason: "unsupported-type";
-}
-
-/** A per-image OCR failure recorded after retries are exhausted. */
-export interface ImageFailure {
-  name: string;
-  /** e.g. "OCR failed after retries" */
-  reason: string;
-}
-
-/** Result of the text-extraction stage. */
-export interface ExtractionResult {
-  text: string;
-  /** OCR failures (archive only). */
-  imageFailures: ImageFailure[];
-  /** Excluded entries carried from input handling. */
-  excluded: ExcludedEntry[];
-}
+/**
+ * Outcome of classifying and validating the uploaded file. Carries the bytes
+ * forward so no filesystem re-read is needed.
+ */
+export type InputClassification =
+  | { kind: "text"; bytes: Uint8Array }
+  | { kind: "image"; bytes: Uint8Array };
 
 /** Final result threaded out of the pipeline. */
 export type ProcessingResult =
-  | {
-      ok: true;
-      summary: string;
-      /** Names of excluded + OCR-failed images. */
-      affectedImages: string[];
-    }
+  | { ok: true; summary: string }
   | { ok: false; error: StageError };

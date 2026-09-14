@@ -1,31 +1,18 @@
 /**
  * Input handling stage.
  *
- * Classifies the input file by extension and validates that its path exists
- * and is readable. All rejections happen here, before any AWS call, so that
- * unsupported, missing, or unreadable inputs never incur processing cost.
+ * Classifies the uploaded file by extension and validates that its bytes are
+ * present and readable, then enforces the size limit. All rejections happen
+ * here, before any AWS call, so that unsupported, missing, oversized, or
+ * unreadable inputs never incur processing cost.
  *
- * This module establishes the structure for input handling. Archive
- * enumeration (task 3.3) builds on top of the branches laid out here; the
- * text-document size limit is enforced here (task 3.2).
+ * This stage operates entirely on in-memory bytes: there is no filesystem
+ * access and no archive handling. It is synchronous and returns a Result
+ * directly.
  */
 
-import { promises as fs, constants as fsConstants } from "node:fs";
-import * as path from "node:path";
-
-import AdmZip from "adm-zip";
-
 import type { Config } from "./config";
-import type {
-  ArchiveImage,
-  ExcludedEntry,
-  InputClassification,
-  Result,
-  StageError,
-} from "./types";
-
-/** File extensions that count as supported images inside an archive. */
-const SUPPORTED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg"]);
+import type { InputClassification, Result, StageError, UploadedFile } from "./types";
 
 const STAGE = "input-handling" as const;
 
@@ -34,97 +21,67 @@ function inputError(message: string): Result<InputClassification, StageError> {
 }
 
 /**
- * Classify the input and validate that it exists and can be read.
- *
- * - `.txt` (case-insensitive) → text document.
- * - `.zip` (case-insensitive) → image archive.
- * - anything else → descriptive error naming the detected extension.
- * - missing path → "not found" error.
- * - existing but unreadable path → "could not be accessed" error.
+ * Derive the lowercased file extension (including the leading dot) from a
+ * filename, or an empty string when there is none.
  */
-export async function classifyAndValidate(
-  inputPath: string,
+function extensionOf(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0) {
+    return "";
+  }
+  return filename.slice(dot).toLowerCase();
+}
+
+/**
+ * Classify the uploaded file and validate it before any further processing.
+ *
+ * - Missing/undefined `file` → "a file is required" error (1.3).
+ * - Extension from `file.filename` (case-insensitive): `.txt` → text;
+ *   `.jpg`/`.jpeg` → image; anything else → descriptive error naming the
+ *   detected extension (1.1, 1.2).
+ * - Unreadable/empty upload buffer → "could not be accessed" error (1.4).
+ * - Bytes strictly larger than `maxInputSizeBytes` → oversized error stating
+ *   the configured limit, before any AWS call (2.2, 2.3).
+ * - On success, return the classification carrying the bytes forward.
+ */
+export function classifyAndValidate(
+  file: UploadedFile | undefined,
   config: Config
-): Promise<Result<InputClassification, StageError>> {
-  const extension = path.extname(inputPath).toLowerCase();
+): Result<InputClassification, StageError> {
+  // No file in the submission (1.3).
+  if (file === undefined) {
+    return inputError("A file is required.");
+  }
 
   // Classify by extension first so an unsupported type is rejected with a
-  // clear message regardless of whether the file happens to exist.
-  if (extension !== ".txt" && extension !== ".zip") {
+  // clear message (1.1, 1.2).
+  const extension = extensionOf(file.filename);
+  let kind: "text" | "image";
+  if (extension === ".txt") {
+    kind = "text";
+  } else if (extension === ".jpg" || extension === ".jpeg") {
+    kind = "image";
+  } else {
     const detected = extension === "" ? "(none)" : extension;
     return inputError(
-      `Unsupported input type: detected extension "${detected}". Only .txt and .zip are supported.`
+      `Unsupported input type: detected extension "${detected}". Only .txt, .jpg, and .jpeg are supported.`
     );
   }
 
-  // Existence + readability check before any further processing.
-  try {
-    await fs.access(inputPath, fsConstants.R_OK);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
-      return inputError(`Input not found: "${inputPath}".`);
-    }
-    return inputError(`Input could not be accessed: "${inputPath}".`);
+  // The upload buffer must be present and non-empty to be readable (1.4).
+  const bytes = file.bytes;
+  if (bytes === undefined || bytes.byteLength === 0) {
+    return inputError("The uploaded file could not be accessed.");
   }
 
-  if (extension === ".txt") {
-    // Reject oversized documents before any AWS call so that summarization
-    // cost stays bounded (2.2). The check is strict: a size equal to the limit
-    // is accepted, only a size greater than the limit is rejected.
-    const { size } = await fs.stat(inputPath);
-    if (size > config.maxInputSizeBytes) {
-      return inputError(
-        `Input exceeds the size limit: ${size} bytes is larger than the configured Max_Input_Size of ${config.maxInputSizeBytes} bytes.`
-      );
-    }
-    return { ok: true, value: { kind: "text", path: inputPath } };
-  }
-
-  // extension === ".zip"
-  // Enumerate the archive entries, classify each by extension, and enforce the
-  // size limit — all before any OCR call so unsupported/oversized archives
-  // never incur processing cost.
-  const zip = new AdmZip(inputPath);
-
-  const images: ArchiveImage[] = [];
-  const excluded: ExcludedEntry[] = [];
-  let totalUncompressedBytes = 0;
-
-  for (const entry of zip.getEntries()) {
-    // Directory entries are not files to OCR; skip them entirely.
-    if (entry.isDirectory) {
-      continue;
-    }
-
-    totalUncompressedBytes += entry.header.size;
-
-    const entryExtension = path.extname(entry.entryName).toLowerCase();
-    if (SUPPORTED_IMAGE_EXTENSIONS.has(entryExtension)) {
-      images.push({ name: entry.entryName, bytes: entry.getData() });
-    } else {
-      // Unsupported type: record for reporting, never send to the OCR service.
-      excluded.push({ name: entry.entryName, reason: "unsupported-type" });
-    }
-  }
-
-  // No supported images means there is nothing to OCR (1.6).
-  if (images.length === 0) {
+  // Reject strictly-oversized uploads before any AWS call, stating the limit
+  // (2.2, 2.3). A size equal to the limit is accepted; only greater is
+  // rejected.
+  if (bytes.byteLength > config.maxInputSizeBytes) {
     return inputError(
-      "Archive contains no supported images: expected at least one .png, .jpg, or .jpeg entry."
+      `Input exceeds the size limit: ${bytes.byteLength} bytes is larger than the configured Max_Input_Size of ${config.maxInputSizeBytes} bytes.`
     );
   }
 
-  // Reject strictly-oversized archives before any AWS call, stating the limit
-  // (2.3). A total equal to the limit is accepted; only greater is rejected.
-  if (totalUncompressedBytes > config.maxInputSizeBytes) {
-    return inputError(
-      `Input exceeds the size limit: total uncompressed archive size ${totalUncompressedBytes} bytes is larger than the configured Max_Input_Size of ${config.maxInputSizeBytes} bytes.`
-    );
-  }
-
-  return {
-    ok: true,
-    value: { kind: "archive", path: inputPath, images, excluded },
-  };
+  return { ok: true, value: { kind, bytes } };
 }

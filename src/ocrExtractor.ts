@@ -1,16 +1,13 @@
 /**
- * Text-extraction stage for image archives.
+ * Text-extraction stage for a single JPEG image.
  *
- * Runs each supported image through Amazon Textract's synchronous
- * `DetectDocumentTextCommand` (one call per image), retrying only on transient
- * errors up to 2 additional times (Requirement 4.1). Excluded entries are
- * never sent to the OCR service (4.5). Images that still fail after retries are
- * recorded in `imageFailures` and processing continues with the rest (4.3).
- *
- * Per-image text is aggregated in ascending order of entry name, separated by
- * a newline, into a single Extracted_Text (4.2). If no image yields any
- * non-whitespace text, the stage fails with a "no text was extracted" error
- * (4.4).
+ * Runs the uploaded image through Amazon Textract's synchronous
+ * `DetectDocumentTextCommand` (one call), retrying only on transient errors up
+ * to 2 additional times — 3 attempts total (Requirement 4.1). If the image
+ * still fails after retries, the stage fails with a "text extraction failed"
+ * error and the Summarizer is not invoked (4.2). The detected `LINE` blocks are
+ * joined into a single Extracted_Text; if that text has no non-whitespace
+ * character the stage fails with a "no text extracted" error (4.3).
  */
 
 import {
@@ -18,14 +15,7 @@ import {
   TextractClient,
 } from "@aws-sdk/client-textract";
 
-import type {
-  ArchiveImage,
-  ExcludedEntry,
-  ExtractionResult,
-  ImageFailure,
-  Result,
-  StageError,
-} from "./types";
+import type { Result, StageError } from "./types";
 
 const STAGE = "text-extraction" as const;
 
@@ -87,85 +77,47 @@ function linesFromResponse(response: {
 }
 
 /**
- * Run OCR on a single image, retrying only on transient errors up to
- * `MAX_RETRIES` additional times (3 total attempts). Returns the detected text
- * on success, or throws the last error once retries are exhausted / the error
- * is permanent.
+ * Extract text from a single JPEG image via Amazon Textract.
+ *
+ * Issues one `DetectDocumentTextCommand` with the image bytes, retrying only on
+ * transient errors up to `MAX_RETRIES` additional times (3 attempts total)
+ * (4.1). If the call still fails, the stage returns a "text extraction failed"
+ * error so the pipeline stops before the Summarizer (4.2). On success the
+ * detected `LINE` blocks are joined into the Extracted_Text; if it contains no
+ * non-whitespace character the stage returns a "no text extracted" error (4.3).
  */
-async function ocrImage(
-  image: ArchiveImage,
+export async function extractFromImage(
+  bytes: Uint8Array,
   textract: TextractClient
-): Promise<string> {
-  let lastError: unknown;
+): Promise<Result<string, StageError>> {
+  let text: string | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await textract.send(
-        new DetectDocumentTextCommand({ Document: { Bytes: image.bytes } })
+        new DetectDocumentTextCommand({ Document: { Bytes: bytes } })
       );
-      return linesFromResponse(response);
+      text = linesFromResponse(response);
+      break;
     } catch (err) {
-      lastError = err;
       // Only keep retrying while the error is transient and attempts remain.
       if (!isTransientError(err) || attempt === MAX_RETRIES) {
-        break;
+        return {
+          ok: false,
+          error: { stage: STAGE, message: "text extraction failed" },
+        };
       }
     }
   }
 
-  throw lastError;
-}
-
-/**
- * Extract text from every supported image in an archive.
- *
- * Excluded entries are carried through untouched and are never sent to the OCR
- * service (4.5). Each supported image is OCR'd exactly once with limited retry
- * (4.1); an image that still fails is recorded in `imageFailures` and does not
- * abort the run (4.3).
- */
-export async function extractFromArchive(
-  images: ArchiveImage[],
-  excluded: ExcludedEntry[],
-  textract: TextractClient
-): Promise<Result<ExtractionResult, StageError>> {
-  const imageFailures: ImageFailure[] = [];
-  const texts: string[] = [];
-
-  // Process images in ascending order of entry name so the aggregated
-  // Extracted_Text is concatenated in that same order (4.2).
-  const ordered = [...images].sort((a, b) => a.name.localeCompare(b.name));
-
-  for (const image of ordered) {
-    try {
-      const text = await ocrImage(image, textract);
-      texts.push(text);
-    } catch {
-      imageFailures.push({
-        name: image.name,
-        reason: "OCR failed after retries",
-      });
-    }
-  }
-
-  // Aggregate the per-image text in entry-name order, separated by a newline
-  // (4.2).
-  const text = texts.join("\n");
-
-  // If no image yielded any non-whitespace text, the extraction stage fails
-  // with a "no text was extracted" error (4.4).
-  if (text.trim().length === 0) {
+  // If the detected text has no non-whitespace character, the stage fails with
+  // a "no text extracted" error (4.3).
+  if (text === undefined || text.trim().length === 0) {
     return {
       ok: false,
-      error: { stage: STAGE, message: "no text was extracted" },
+      error: { stage: STAGE, message: "no text extracted" },
     };
   }
 
-  // On success the ExtractionResult carries the per-image OCR failures and the
-  // excluded entries so the reporter can surface them alongside the summary
-  // (4.3, 6.2).
-  return {
-    ok: true,
-    value: { text, imageFailures, excluded },
-  };
+  return { ok: true, value: text };
 }

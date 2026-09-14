@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text Summary Extractor</title>
+    <style>
+      :root {
+        --border: #d0d7de;
+        --bg: #f6f8fa;
+        --text: #1f2328;
+        --muted: #656d76;
+        --accent: #0969da;
+        --error-bg: #fff1f0;
+        --error-border: #ffccc7;
+        --error-text: #a40e26;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        margin: 0;
+        padding: 2rem 1rem;
+        line-height: 1.5;
+      }
+
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+      }
+
+      h1 {
+        margin: 0 0 0.25rem;
+        font-size: 1.5rem;
+      }
+
+      p.instructions {
+        margin: 0 0 1.5rem;
+        color: var(--muted);
+      }
+
+      form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      input[type="file"] {
+        flex: 1 1 auto;
+        min-width: 200px;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      .status {
+        margin-top: 1.25rem;
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .result {
+        margin-top: 1.25rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .result h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+      }
+
+      .error {
+        margin-top: 1.25rem;
+        padding: 1rem;
+        border: 1px solid var(--error-border);
+        border-radius: 6px;
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Text Summary Extractor</h1>
+      <p class="instructions">
+        Upload a single text file (<code>.txt</code>) or JPEG image
+        (<code>.jpg</code> / <code>.jpeg</code>) and get back a concise summary.
+      </p>
+
+      <form id="upload-form">
+        <input
+          type="file"
+          id="file-input"
+          name="file"
+          accept=".txt,.jpg,.jpeg"
+        />
+        <button type="submit" id="submit-btn">Summarize</button>
+      </form>
+
+      <div id="status" class="status hidden"></div>
+
+      <section id="result" class="result hidden">
+        <h2>Summary</h2>
+        <div id="summary-text"></div>
+      </section>
+
+      <div id="error" class="error hidden"></div>
+    </main>
+
+    <script>
+      const form = document.getElementById("upload-form");
+      const fileInput = document.getElementById("file-input");
+      const submitBtn = document.getElementById("submit-btn");
+      const statusEl = document.getElementById("status");
+      const resultEl = document.getElementById("result");
+      const summaryTextEl = document.getElementById("summary-text");
+      const errorEl = document.getElementById("error");
+
+      function show(el) {
+        el.classList.remove("hidden");
+      }
+
+      function hide(el) {
+        el.classList.add("hidden");
+      }
+
+      function reset() {
+        hide(statusEl);
+        hide(resultEl);
+        hide(errorEl);
+        summaryTextEl.textContent = "";
+        errorEl.textContent = "";
+      }
+
+      function showError(message) {
+        errorEl.textContent = message;
+        show(errorEl);
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        reset();
+
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          showError("Please choose a file before submitting.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        submitBtn.disabled = true;
+        statusEl.textContent = "Summarizing\u2026";
+        show(statusEl);
+
+        try {
+          const response = await fetch("/api/summarize", {
+            method: "POST",
+            body: formData,
+          });
+
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            data = null;
+          }
+
+          if (response.ok && data && typeof data.summary === "string") {
+            summaryTextEl.textContent = data.summary;
+            show(resultEl);
+          } else if (data && typeof data.error === "string") {
+            const prefix = data.stage ? "[" + data.stage + "] " : "";
+            showError(prefix + data.error);
+          } else {
+            showError(
+              "Something went wrong (HTTP " + response.status + "). Please try again."
+            );
+          }
+        } catch (err) {
+          showError(
+            "Could not reach the server. Please check it is running and try again."
+          );
+        } finally {
+          hide(statusEl);
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

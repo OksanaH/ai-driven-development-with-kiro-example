@@ -2,90 +2,96 @@
 
 ## Overview
 
-This plan builds the proof-of-concept CLI in small, incremental TypeScript steps. It starts with project scaffolding and shared types, adds configuration, then implements each pipeline stage (input handling, text/OCR extraction, summarization, reporting), and finishes by wiring everything together through the orchestrator and CLI entry point. Each task builds on the previous one so there is no orphaned code. Per the POC scope, there are no test tasks.
+This plan adapts the existing CLI/archive codebase into the new proof-of-concept **local web app**: a browser uploads a single file (`.txt` or one `.jpg`/`.jpeg`), a local HTTP server runs the pipeline over the uploaded bytes, and the frontend displays the returned `{ summary }` or `{ error, stage }`. The work proceeds in small, incremental TypeScript steps that each build on the previous one: first reshape the shared types and config, then rework each pipeline stage to operate on in-memory bytes (dropping all archive/zip and multi-image logic), swap Bedrock for a mock `Summarizer` behind an interface, and finally add the frontend asset and the HTTP server that wires everything together. Textract OCR (image path only) remains the sole real AWS call. Per the POC scope, there are no test tasks.
 
 ## Tasks
 
-- [x] 1. Set up project structure and shared types
-  - Initialize a TypeScript Node project (`package.json`, `tsconfig.json`) with the `src/` directory
-  - Add dependencies: `@aws-sdk/client-textract`, `@aws-sdk/client-bedrock-runtime`, and a zip-reading library for archive enumeration
-  - Create `src/types.ts` defining `Stage`, `StageError`, `Result`, `InputClassification`, `ArchiveImage`, `ExcludedEntry`, `ImageFailure`, `ExtractionResult`, and `ProcessingResult`
-  - _Requirements: 1.1, 6.3_
+- [ ] 1. Reshape shared types for single-file, in-memory scope
+  - In `src/types.ts`, add `UploadedFile { filename: string; bytes: Uint8Array }`
+  - Change `InputClassification` to `{ kind: "text"; bytes: Uint8Array } | { kind: "image"; bytes: Uint8Array }`
+  - Reduce `ProcessingResult` to `{ ok: true; summary: string } | { ok: false; error: StageError }`
+  - Remove the archive/multi-image types: `ArchiveImage`, `ExcludedEntry`, `ImageFailure`, and `ExtractionResult`
+  - Keep `Stage`, `StageError`, and `Result<T, E>` as-is
+  - _Requirements: 1.1, 6.4_
 
-- [x] 2. Implement configuration resolution
-  - Create `src/config.ts` defining the `Config` interface and a resolver that reads from environment variables with defaults
-  - Default `maxInputSizeBytes` to 10,485,760 and clamp/validate to the inclusive range 1..104,857,600, falling back to the default when out of range
-  - Provide POC defaults for `maxSummarizerInputBytes`, `summarizerTimeoutMs`, `bedrockModelId`, and `awsRegion`
-  - _Requirements: 2.1, 5.4, 5.5_
+- [ ] 2. Add the HTTP port to configuration
+  - In `src/config.ts`, add `httpPort: number` to the `Config` interface
+  - Resolve it from an environment variable with a POC default of `3000`
+  - Leave `bedrockModelId` / `awsRegion` in place for a future real Bedrock impl
+  - _Requirements: 6.1_
 
-- [x] 3. Implement input classification and validation
-  - [x] 3.1 Implement extension classification and path checks in `src/inputHandler.ts`
-    - Classify `.txt` as text and `.zip` as archive case-insensitively; return a descriptive error naming the detected extension for anything else
-    - Return a "not found" error when the path does not exist and a "could not be accessed" error when it exists but cannot be read
-    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+- [ ] 3. Rework input classification to operate on uploaded bytes
+  - Rewrite `src/inputHandler.ts` so `classifyAndValidate(file: UploadedFile | undefined, config: Config)` operates on in-memory bytes with no filesystem access and no zip logic
+  - Missing/undefined `file` → "a file is required" input-handling error
+  - Classify by extension from `file.filename` (case-insensitive): `.txt` → text, `.jpg`/`.jpeg` → image; any other extension → descriptive error naming the detected extension
+  - Unreadable/empty upload buffer → "could not be accessed" error
+  - Reject when `file.bytes.byteLength` is strictly greater than `maxInputSizeBytes` (applies to both text and image), stating the configured limit — before any AWS call
+  - On success return the `{ kind, bytes }` classification carrying the bytes forward
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 2.3_
 
-  - [x] 3.2 Implement text-document size enforcement
-    - Compare the text file byte size against `Max_Input_Size` and reject if strictly greater, stating the configured limit
-    - Ensure rejection happens before any AWS call
-    - _Requirements: 2.2_
-
-  - [x] 3.3 Implement archive enumeration, exclusion, and size enforcement
-    - Enumerate `.png`/`.jpg`/`.jpeg` entries (case-insensitive) as `ArchiveImage` entries, recording all other entries as `ExcludedEntry` with reason `unsupported-type` and no OCR call
-    - Return the "no supported images" error when there are zero supported images
-    - Sum uncompressed entry sizes and reject if strictly greater than `Max_Input_Size`, stating the limit
-    - _Requirements: 1.5, 1.6, 2.3, 2.4_
-
-- [x] 4. Checkpoint - validate input handling
-  - Ensure the project compiles and input handling behaves as designed, ask the user if questions arise.
-
-- [x] 5. Implement text document reading
-  - Create `src/textReader.ts` with `readTextDocument` that reads and decodes the file as UTF-8 without any OCR
-  - Return a "could not be decoded" error on decode failure and a "document is empty" error when content is empty or whitespace-only
-  - Return the decoded content as `Extracted_Text` on success
+- [ ] 4. Rework text reading to decode in-memory bytes
+  - Rewrite `src/textReader.ts` with `readTextBytes(bytes: Uint8Array): Result<string, StageError>` that decodes UTF-8 with `fatal: true` from memory (no path read)
+  - Undecodable bytes → "could not be decoded" error
+  - Empty or whitespace-only content → "document is empty" error
+  - Otherwise return the decoded content as the Extracted_Text
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [x] 6. Implement OCR extraction from archive images
-  - [x] 6.1 Implement per-image Textract calls with retry in `src/ocrExtractor.ts`
-    - Call `DetectDocumentTextCommand` exactly once per supported image, retrying up to 2 additional times only on transient errors (throttling / 5xx / network)
-    - Never invoke the OCR service for excluded entries; join returned `LINE` blocks into per-image text
-    - Record images that still fail after retries in `imageFailures` and continue processing the rest
-    - _Requirements: 4.1, 4.3, 4.5_
+- [ ] 5. Rework OCR extraction for a single image
+  - Rewrite `src/ocrExtractor.ts` with `extractFromImage(bytes: Uint8Array, textract: TextractClient): Promise<Result<string, StageError>>`
+  - Issue a single `DetectDocumentTextCommand` with the image bytes, retrying up to 2 additional times only on transient errors (throttling / 5xx / network)
+  - On success, join the returned `LINE` blocks into one string
+  - Still failing after retries → "text extraction failed" error (summarizer not invoked)
+  - Detected text with no non-whitespace character → "no text extracted" error
+  - Remove all archive/multi-image aggregation and excluded-entry handling
+  - _Requirements: 4.1, 4.2, 4.3_
 
-  - [x] 6.2 Aggregate extracted text and enforce non-empty result
-    - Concatenate per-image text in ascending order of entry name, separated by a newline, into a single `Extracted_Text`
-    - Return a "no text was extracted" error when no image yields any non-whitespace text, carrying `imageFailures` and `excluded` into the `ExtractionResult`
-    - _Requirements: 4.2, 4.4_
+- [ ] 6. Checkpoint - validate input handling and extraction
+  - Ensure the project compiles after the types/config/input/text/OCR rework, ask the user if questions arise.
 
-- [x] 7. Implement summarization
-  - Create `src/summarizer.ts` with `summarize` that guards against empty/whitespace-only input by returning a "no text to summarize" error without calling Bedrock
-  - Truncate `text` to `Max_Summarizer_Input` bytes when the UTF-8 byte length exceeds it before invoking Bedrock
-  - Invoke Bedrock with a summarization prompt raced against the configured timeout; return a "summarization failed" error on error/timeout and the summary text on success
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+- [ ] 7. Replace Bedrock summarization with a mock behind an interface
+  - Rewrite `src/summarizer.ts` to define `interface Summarizer { summarize(text: string): Promise<string> }`
+  - Implement `class MockSummarizer implements Summarizer` producing a deterministic placeholder derived only from the input (e.g. `"Summary (N words): <first sentence>…"`), with no AWS call
+  - Add `runSummarizer(text: string, summarizer: Summarizer, config: Config): Promise<Result<string, StageError>>` that guards empty/whitespace-only input ("no text to summarize", summarizer not invoked), truncates `text` to `maxSummarizerInputBytes` by UTF-8 byte length, and races the summarize call against `summarizerTimeoutMs` ("summarization failed" on error/timeout)
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-- [x] 8. Implement result reporting
-  - Create `src/reporter.ts` with `report` that prints the summary on success and, when `affectedImages` is non-empty, prints the total count and each affected file name alongside the summary
-  - On failure, print a single descriptive message tagged with the failed stage and print no summary
-  - _Requirements: 6.1, 6.2, 6.3, 6.4_
-
-- [x] 9. Implement pipeline orchestration
-  - Create `src/pipeline.ts` that threads the `ProcessingResult` through the stages, short-circuiting on the first `StageError`
-  - Branch on classification: text → `readTextDocument`; archive → `extractFromArchive`; converge on a single `Extracted_Text` then call `summarize`
-  - Build `affectedImages` as the union of excluded entry names and OCR-failed image names for a successful run
+- [ ] 8. Rework the pipeline for the single-file byte flow
+  - Rewrite `src/pipeline.ts` with `runPipeline(file: UploadedFile | undefined, config: Config, textract: TextractClient, summarizer: Summarizer): Promise<ProcessingResult>`
+  - Stage 1: `classifyAndValidate(file, config)`
+  - Stage 2: branch on classification — text → `readTextBytes(bytes)`, image → `extractFromImage(bytes, textract)` — converging on a single Extracted_Text
+  - Stage 3: `runSummarizer(text, summarizer, config)`
+  - Short-circuit on the first `StageError`, returning `{ ok: false, error }`; on success return `{ ok: true, summary }`
+  - Drop the Bedrock client parameter and all `affectedImages` logic
   - _Requirements: 1.1, 4.2, 6.4_
 
-- [x] 10. Implement CLI entry point and wire everything together
-  - Create `src/cli.ts` that parses the input path argument, loads config, constructs the Textract and Bedrock clients, invokes the pipeline, and passes the result to `report`
-  - Exit with a status reflecting the reported result
-  - _Requirements: 1.1, 6.1, 6.3_
+- [ ] 9. Add the web frontend asset
+  - Create `public/index.html`: a single static page with a file input restricted via `accept=".txt,.jpg,.jpeg"` and a submit button
+  - On submit, POST the file to `/api/summarize` as `multipart/form-data` using `fetch`
+  - On a `{ summary }` response, render the summary in a result area; on an `{ error, stage }` response, render the error message (optionally noting the stage) and show no summary
+  - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [x] 11. Final checkpoint - end-to-end wiring
-  - Ensure the project compiles and the CLI runs against a sample `.txt` and a sample `.zip`, ask the user if questions arise.
+- [ ] 10. Implement the HTTP server as the primary entry point
+  - Create `src/server.ts` with `startServer(config: Config, textract: TextractClient): http.Server` built on Node's `http` module
+  - `GET /` responds `200 text/html` serving `public/index.html`
+  - `POST /api/summarize` parses the uploaded file (minimal multipart parsing or a small well-known dependency such as `busboy` — keep it simple), builds an `UploadedFile { filename, bytes }`, and runs `runPipeline` with a `TextractClient` and a `MockSummarizer`
+  - Respond `200 application/json { "summary" }` on success and `4xx/5xx application/json { "error", "stage" }` on failure; a missing file maps to an input-handling error
+  - Listen on `config.httpPort`
+  - _Requirements: 6.1, 6.2, 6.3, 6.4_
+
+- [ ] 11. Wire dependencies, scripts, and the CLI so everything compiles
+  - Update `package.json`: add a `"serve": "node dist/server.js"` script, point `main` (and `bin` if kept) appropriately, and add the multipart dependency if one is used; remove the `@aws-sdk/client-bedrock-runtime` and `adm-zip` dependencies that are no longer needed
+  - Ensure `tsc` emits `dist/server.js`, and confirm `public/index.html` is available to the running server (served via a path relative to the project root)
+  - Update `src/cli.ts` so it still compiles: either adapt it to read a file from disk into an `UploadedFile` and call the new `runPipeline` with a `MockSummarizer`, or de-emphasize it as an optional secondary entry — but it must not reference removed types or Bedrock
+  - _Requirements: 6.1_
+
+- [ ] 12. Final checkpoint - build and manual run
+  - Build with `tsc`, start the server locally (`serve`), open the frontend, upload a sample `.txt`, and confirm the deterministic mock summary is displayed. Ask the user if questions arise.
 
 ## Notes
 
 - This is a proof of concept; per the design, automated tests are out of scope and no test tasks are included.
+- The `.txt` path plus the mock `Summarizer` runs fully locally with no AWS involvement; Textract OCR on the JPEG path is the only real AWS call.
 - Each task references specific requirements for traceability.
-- Checkpoints ensure incremental validation as stages come together.
+- Checkpoints ensure incremental validation as the codebase is reshaped from the previous CLI/archive implementation.
 - The flow is intentionally linear and straightforward, favoring readability over abstraction.
 
 ## Task Dependency Graph
@@ -93,13 +99,11 @@ This plan builds the proof-of-concept CLI in small, incremental TypeScript steps
 ```json
 {
   "waves": [
-    { "id": 0, "tasks": ["1"] },
-    { "id": 1, "tasks": ["2", "3.1"] },
-    { "id": 2, "tasks": ["3.2", "3.3", "5", "8"] },
-    { "id": 3, "tasks": ["6.1"] },
-    { "id": 4, "tasks": ["6.2", "7"] },
-    { "id": 5, "tasks": ["9"] },
-    { "id": 6, "tasks": ["10"] }
+    { "id": 0, "tasks": ["1", "2"] },
+    { "id": 1, "tasks": ["3", "4", "5", "7", "9"] },
+    { "id": 2, "tasks": ["8"] },
+    { "id": 3, "tasks": ["10"] },
+    { "id": 4, "tasks": ["11"] }
   ]
 }
 ```

@@ -1,0 +1,12 @@
+# Terraform state and lock
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Local variable values (may contain secrets)
+terraform.tfvars
+*.auto.tfvars
+
+# Build artifacts (Lambda bundle + zip)
+.build/
