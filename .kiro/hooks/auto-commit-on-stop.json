@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Auto Commit with Summary",
+      "trigger": "Stop",
+      "action": {
+        "type": "agent",
+        "prompt": "Stage and commit the changes you just made. Steps:\n1. Run `git status --short` to see what changed. If there are no changes, do nothing and stop.\n2. Stage the files you modified in this session with `git add` (prefer naming specific files over `git add .`). Do NOT stage files that look like they contain secrets (.env, credentials, keys).\n3. Commit with `git commit -m \"<message>\"` where the message is a concise summary of the actions you performed in this session, written in the conventional-commits style (e.g. \"feat: add pagination to users endpoint\"). Use the imperative mood and keep the subject under 70 characters. Add a short body listing the key changes if there is more than one.\n4. Do not push. Report the commit hash and message when done."
+      }
+    }
+  ]
+}
