@@ -1,0 +1,15 @@
+{
+  "name": "text-summary-extractor-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infrastructure build helpers for the Text Summary Extractor: bundles the Lambda handler with esbuild so Terraform can package and deploy it.",
+  "scripts": {
+    "bundle": "esbuild lambda/handler.ts --bundle --platform=node --target=node20 --format=cjs --sourcemap --external:@aws-sdk/* --outfile=../terraform/.build/index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "dependencies": {
+    "text-summary-extractor": "file:.."
+  }
+}

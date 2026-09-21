@@ -1,6 +1,6 @@
 # --- Lambda bundling ---
 #
-# CDK's NodejsFunction runs esbuild to compile the TypeScript handler (and the
+# Nodejs Function runs esbuild to compile the TypeScript handler (and the
 # src/ pipeline it imports) into a single CommonJS file, marking @aws-sdk/* as
 # external because it is already present in the Lambda runtime. Terraform has no
 # built-in equivalent, so we reproduce that build with a local esbuild call and
@@ -17,14 +17,18 @@ locals {
   build_dir     = "${path.module}/.build"
   bundle_file   = "${local.build_dir}/index.js"
 
-  # Rebuild when the handler or any pipeline source under src/ changes. Each
-  # entry is hashed by its absolute path so edits invalidate the build trigger.
-  src_hashes   = [for f in fileset("${local.repo_root}/src", "**/*.ts") : filesha1("${local.repo_root}/src/${f}")]
-  handler_hash = filesha1(local.handler_entry)
-  source_hash  = sha1(join("", concat([local.handler_hash], local.src_hashes)))
+  # The static frontend served by the handler on GET /. It must be packaged
+  # into the Lambda bundle next to index.js so the handler can read it.
+  index_html = "${local.repo_root}/public/index.html"
+
+  # Rebuild when the handler, any pipeline source under src/, or the frontend
+  # asset changes. Each entry is hashed so edits invalidate the build trigger.
+  src_hashes      = [for f in fileset("${local.repo_root}/src", "**/*.ts") : filesha1("${local.repo_root}/src/${f}")]
+  handler_hash    = filesha1(local.handler_entry)
+  index_html_hash = filesha1(local.index_html)
+  source_hash     = sha1(join("", concat([local.handler_hash, local.index_html_hash], local.src_hashes)))
 }
 
-# Run esbuild to produce a single CJS bundle at .build/index.js.
 resource "null_resource" "bundle" {
   triggers = {
     source_hash = local.source_hash
@@ -32,27 +36,30 @@ resource "null_resource" "bundle" {
 
   provisioner "local-exec" {
     working_dir = "${local.repo_root}/infra"
-    # Mirror the CDK bundling options: CJS, node20 target, sourcemap, and the
-    # AWS SDK v3 left external (provided by the Lambda runtime).
-    command = join(" ", [
-      "npx esbuild",
-      "\"${local.handler_entry}\"",
-      "--bundle",
-      "--platform=node",
-      "--target=node20",
-      "--format=cjs",
-      "--sourcemap",
-      "--external:@aws-sdk/*",
-      "--outfile=\"${abspath(local.bundle_file)}\"",
-    ])
+    
+    # Using relative paths for both entry point and outfile avoids space-quoting issues on Windows
+    command = "npx esbuild lambda/handler.ts --bundle --platform=node --target=node20 --format=cjs --sourcemap --external:@aws-sdk/* --outfile=../terraform/.build/index.js"
   }
+}
+
+# Copy the static frontend into the bundle directory so it is packaged next to
+# index.js. The handler resolves index.html relative to __dirname (the unzipped
+# bundle root), so it must live alongside the compiled handler in the zip.
+resource "local_file" "index_html" {
+  content  = file(local.index_html)
+  filename = "${local.build_dir}/index.html"
+
+  depends_on = [null_resource.bundle]
 }
 
 # Zip the bundle for Lambda deployment.
 data "archive_file" "lambda" {
   type        = "zip"
   source_dir  = local.build_dir
-  output_path = "${path.module}/.build/lambda.zip"
+  output_path = "${path.module}/lambda.zip"
 
-  depends_on = [null_resource.bundle]
+  depends_on = [
+    null_resource.bundle,
+    local_file.index_html,
+  ]
 }

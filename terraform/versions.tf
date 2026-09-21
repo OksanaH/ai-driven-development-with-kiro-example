@@ -14,5 +14,9 @@ terraform {
       source  = "hashicorp/null"
       version = "~> 3.3" # Runs esbuild via local-exec
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.5" # Copies the frontend asset into the Lambda bundle
+    }
   }
 }

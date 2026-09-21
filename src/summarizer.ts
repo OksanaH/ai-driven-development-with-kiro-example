@@ -18,9 +18,6 @@ import type { Result, StageError } from "./types";
 
 const STAGE = "summarization" as const;
 
-/** Character ceiling for the placeholder's first-sentence fragment. */
-const FIRST_SENTENCE_MAX_CHARS = 150;
-
 function summarizationError(message: string): Result<string, StageError> {
   return { ok: false, error: { stage: STAGE, message } };
 }
@@ -53,22 +50,15 @@ export interface Summarizer {
  * A local, deterministic Summarizer that never calls AWS (5.4).
  *
  * The placeholder is derived only from the input text: it reports the word
- * count and the first sentence (the text up to the first period, or the first
- * ~150 characters when there is no period). The same input always yields the
- * same output.
+ * count followed by the full (whitespace-trimmed) text. The same input always
+ * yields the same output.
  */
 export class MockSummarizer implements Summarizer {
   async summarize(text: string): Promise<string> {
     const trimmed = text.trim();
     const wordCount = trimmed.split(/\s+/).filter((w) => w.length > 0).length;
 
-    const periodIndex = trimmed.indexOf(".");
-    const firstSentence =
-      periodIndex >= 0
-        ? trimmed.slice(0, periodIndex)
-        : trimmed.slice(0, FIRST_SENTENCE_MAX_CHARS);
-
-    return `Summary (${wordCount} words): ${firstSentence}…`;
+    return `Summary (${wordCount} words): ${trimmed}`;
   }
 }
 

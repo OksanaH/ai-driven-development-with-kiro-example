@@ -19,7 +19,7 @@ resource "aws_iam_role" "lambda" {
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
 }
 
-# Allow the function to write its own logs to the dedicated log group. CDK's
+# Allow the function to write its own logs to the dedicated log group.
 # NodejsFunction attaches this implicitly via the managed basic-execution role;
 # we scope it to the specific log group instead.
 data "aws_iam_policy_document" "logs" {

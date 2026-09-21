@@ -1,7 +1,7 @@
 # Optional cost guardrail: a monthly budget with an alert at 80% actual spend.
 # Purely observational — it never blocks usage. Created only when
 # monthly_budget_usd is set; the notification is attached only when an alert
-# email is provided (matching the CDK behavior).
+# email is provided
 resource "aws_budgets_budget" "monthly" {
   count = var.monthly_budget_usd == null ? 0 : 1
 

@@ -1,0 +1,11 @@
+---
+inclusion: manual
+description: "Builds the app, starts the local server, and opens it in the default browser."
+---
+
+Build and launch the Text Summary Extractor locally, then open it in the browser:
+1. Run `npm run build` to compile the TypeScript to `dist/`. If the build fails, report the errors and stop.
+2. Start the server as a background process with the command `npm run serve` (it listens on http://localhost:3000 by default; the port comes from the HTTP_PORT or PORT env var if set).
+3. Read the background process output to confirm the server logged `Server listening on http://localhost:<port>`. If it failed to start, report the error and stop.
+4. Open the app in the default browser by running `start "" http://localhost:3000` (use the actual port if it differs).
+5. Report the URL and confirm the server is running. Remind the user the server keeps running in the background until they stop it.
