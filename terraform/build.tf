@@ -6,14 +6,14 @@
 # built-in equivalent, so we reproduce that build with a local esbuild call and
 # then zip the result with the archive provider.
 #
-# esbuild is already a devDependency of infra/package.json, so we invoke it from
+# esbuild is already a devDependency of lambda/package.json, so we invoke it from
 # there via `npx`. The build runs whenever any handler or src/ source file
 # changes (tracked through the source_hash trigger below).
 
 locals {
   # terraform/  ->  repo root
   repo_root     = abspath("${path.module}/..")
-  handler_entry = "${local.repo_root}/infra/lambda/handler.ts"
+  handler_entry = "${local.repo_root}/lambda/handler.ts"
   build_dir     = "${path.module}/.build"
   bundle_file   = "${local.build_dir}/index.js"
 
@@ -35,7 +35,7 @@ resource "null_resource" "bundle" {
   }
 
   provisioner "local-exec" {
-    working_dir = "${local.repo_root}/infra"
+    working_dir = "lambda"
     
     # Using relative paths for both entry point and outfile avoids space-quoting issues on Windows
     command = "npx esbuild lambda/handler.ts --bundle --platform=node --target=node20 --format=cjs --sourcemap --external:@aws-sdk/* --outfile=../terraform/.build/index.js"

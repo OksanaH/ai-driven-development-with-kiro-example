@@ -17,7 +17,7 @@ This plan adapts the existing CLI/archive codebase into the new proof-of-concept
 - [ ] 2. Add the HTTP port to configuration
   - In `src/config.ts`, add `httpPort: number` to the `Config` interface
   - Resolve it from an environment variable with a POC default of `3000`
-  - Leave `bedrockModelId` / `awsRegion` in place for a future real Bedrock impl
+  - Leave `bedrockModelId` / `awsRegion` in place for a future real Bedrock implementation
   - _Requirements: 6.1_
 
 - [ ] 3. Rework input classification to operate on uploaded bytes
