@@ -13,7 +13,7 @@
 locals {
   # terraform/  ->  repo root
   repo_root     = abspath("${path.module}/..")
-  handler_entry = "${local.repo_root}/lambda/handler.ts"
+  handler_entry = "lambda/handler.ts"
   build_dir     = "${path.module}/.build"
   bundle_file   = "${local.build_dir}/index.js"
 
@@ -37,8 +37,10 @@ resource "null_resource" "bundle" {
   provisioner "local-exec" {
     working_dir = "lambda"
     
-    # Using relative paths for both entry point and outfile avoids space-quoting issues on Windows
-    command = "npx esbuild lambda/handler.ts --bundle --platform=node --target=node20 --format=cjs --sourcemap --external:@aws-sdk/* --outfile=../terraform/.build/index.js"
+    # Using relative paths for both entry point and outfile avoids space-quoting issues on Windows.
+    # working_dir is terraform/lambda, so the entry is handler.ts and the output
+    # goes one level up into terraform/.build/index.js.
+    command = "npx esbuild handler.ts --bundle --platform=node --target=node20 --format=cjs --sourcemap --external:@aws-sdk/* --outfile=../.build/index.js"
   }
 }
 

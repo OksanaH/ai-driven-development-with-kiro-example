@@ -17,10 +17,11 @@ import path from "node:path";
 
 import busboy from "busboy";
 import { TextractClient } from "@aws-sdk/client-textract";
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 
 import { resolveConfig, type Config } from "./config";
 import { runPipeline } from "./pipeline";
-import { MockSummarizer, type Summarizer } from "./summarizer";
+import { BedrockSummarizer, type Summarizer } from "./summarizer";
 import type { Stage, UploadedFile } from "./types";
 
 /**
@@ -177,10 +178,9 @@ async function handleSummarize(
  */
 export function startServer(
   config: Config,
-  textract: TextractClient
+  textract: TextractClient,
+  summarizer: Summarizer
 ): http.Server {
-  const summarizer = new MockSummarizer();
-
   const server = http.createServer((req, res) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
@@ -215,10 +215,12 @@ export function startServer(
   return server;
 }
 
-// Runnable entry point: resolve config, construct the Textract client and the
-// mock summarizer, and start the server.
+// Runnable entry point: resolve config, construct the Textract and Bedrock
+// clients and the real Bedrock summarizer, and start the server.
 if (require.main === module) {
   const config = resolveConfig();
   const textract = new TextractClient({ region: config.awsRegion });
-  startServer(config, textract);
+  const bedrock = new BedrockRuntimeClient({ region: config.awsRegion });
+  const summarizer = new BedrockSummarizer(bedrock, config.bedrockModelId);
+  startServer(config, textract, summarizer);
 }

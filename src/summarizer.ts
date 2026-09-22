@@ -11,7 +11,16 @@
  * to a configurable byte ceiling (5.6), and races the call against a
  * configurable timeout (5.5) so the contract stays identical to a future
  * networked implementation.
+ *
+ * `BedrockSummarizer` is the real implementation: it calls Amazon Bedrock's
+ * `InvokeModel` with the Anthropic Claude Messages API and returns the model's
+ * summary. `MockSummarizer` is kept for offline/local runs and tests.
  */
+
+import {
+  BedrockRuntimeClient,
+  InvokeModelCommand,
+} from "@aws-sdk/client-bedrock-runtime";
 
 import type { Config } from "./config";
 import type { Result, StageError } from "./types";
@@ -59,6 +68,79 @@ export class MockSummarizer implements Summarizer {
     const wordCount = trimmed.split(/\s+/).filter((w) => w.length > 0).length;
 
     return `Summary (${wordCount} words): ${trimmed}`;
+  }
+}
+
+/** Anthropic Messages API version identifier expected by Bedrock. */
+const ANTHROPIC_VERSION = "bedrock-2023-05-31";
+
+/** Upper bound on the summary length the model is allowed to generate. */
+const MAX_OUTPUT_TOKENS = 1024;
+
+/** Instruction that steers the model toward a concise, faithful summary. */
+const SYSTEM_PROMPT =
+  "You are a summarization assistant. Produce a concise, accurate summary of " +
+  "the user's text. Capture the main points and key details, use plain prose, " +
+  "and do not add information that is not present in the text.";
+
+/** Shape of the Anthropic Messages API response body returned by Bedrock. */
+interface AnthropicMessagesResponse {
+  content?: Array<{ type?: string; text?: string }>;
+}
+
+/**
+ * A real Summarizer backed by Amazon Bedrock (5.1, 5.3).
+ *
+ * Calls `InvokeModel` with the Anthropic Claude Messages API: the extracted
+ * text is sent as a single user turn under a summarization system prompt, and
+ * the concatenated text blocks of the response are returned as the summary.
+ *
+ * This class only performs the model call. The cost-safety guards
+ * (empty-input rejection, byte truncation, and timeout) live in
+ * `runSummarizer`, so they apply uniformly regardless of implementation.
+ */
+export class BedrockSummarizer implements Summarizer {
+  constructor(
+    private readonly client: BedrockRuntimeClient,
+    private readonly modelId: string
+  ) {}
+
+  async summarize(text: string): Promise<string> {
+    const body = JSON.stringify({
+      anthropic_version: ANTHROPIC_VERSION,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: `Summarize the following text:\n\n${text}` }],
+        },
+      ],
+    });
+
+    const response = await this.client.send(
+      new InvokeModelCommand({
+        modelId: this.modelId,
+        contentType: "application/json",
+        accept: "application/json",
+        body,
+      })
+    );
+
+    const decoded = new TextDecoder().decode(response.body);
+    const parsed = JSON.parse(decoded) as AnthropicMessagesResponse;
+
+    const summary = (parsed.content ?? [])
+      .filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (summary.length === 0) {
+      throw new Error("the model returned an empty summary");
+    }
+
+    return summary;
   }
 }
 

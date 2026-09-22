@@ -33,13 +33,13 @@ variable "summarizer_timeout_ms" {
 variable "bedrock_model_id" {
   description = "Foundation model id retained for a future real Bedrock summarizer."
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 
 variable "grant_bedrock_invoke" {
-  description = "Grant bedrock:InvokeModel on bedrock_model_id. Leave false while the summarizer is the local mock."
+  description = "Grant bedrock:InvokeModel on bedrock_model_id. Required now that the summarizer is the real Bedrock implementation."
   type        = bool
-  default     = false
+  default     = true
 }
 
 # --- Cost guardrail ---

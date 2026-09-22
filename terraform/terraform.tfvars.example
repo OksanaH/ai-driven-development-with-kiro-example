@@ -9,7 +9,7 @@ function_name = "text-summary-extractor-web-app"
 max_input_size_bytes       = 10485760 # 10 MB
 max_summarizer_input_bytes = 100000
 summarizer_timeout_ms      = 30000
-bedrock_model_id           = "anthropic.claude-3-haiku-20240307-v1:0"
+bedrock_model_id           = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 grant_bedrock_invoke       = false
 
 # --- Cost guardrail ---

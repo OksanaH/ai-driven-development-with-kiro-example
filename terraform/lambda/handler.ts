@@ -20,10 +20,11 @@ import path from "node:path";
 
 import busboy from "busboy";
 import { TextractClient } from "@aws-sdk/client-textract";
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 
 import { resolveConfig, type Config } from "../../src/config";
 import { runPipeline } from "../../src/pipeline";
-import { MockSummarizer, type Summarizer } from "../../src/summarizer";
+import { BedrockSummarizer, type Summarizer } from "../../src/summarizer";
 import type { Stage, UploadedFile } from "../../src/types";
 
 /**
@@ -55,7 +56,11 @@ interface FunctionUrlResponse {
 // are reused across warm invocations.
 const config: Config = resolveConfig();
 const textract = new TextractClient({ region: config.awsRegion });
-const summarizer: Summarizer = new MockSummarizer();
+const bedrock = new BedrockRuntimeClient({ region: config.awsRegion });
+const summarizer: Summarizer = new BedrockSummarizer(
+  bedrock,
+  config.bedrockModelId
+);
 
 /**
  * Map a failed pipeline stage to an HTTP status code (6.4), matching the local

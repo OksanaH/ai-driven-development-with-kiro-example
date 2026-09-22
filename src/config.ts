@@ -31,7 +31,7 @@ const MAX_INPUT_SIZE_BYTES = 104_857_600;
 /** POC defaults for the remaining configurable values. */
 const DEFAULT_MAX_SUMMARIZER_INPUT_BYTES = 100_000;
 const DEFAULT_SUMMARIZER_TIMEOUT_MS = 30_000;
-const DEFAULT_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0";
+const DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 const DEFAULT_AWS_REGION = "us-east-1";
 const DEFAULT_HTTP_PORT = 3000;
 

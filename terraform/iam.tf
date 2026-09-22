@@ -1,4 +1,5 @@
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 # --- Execution role ---
 
@@ -66,7 +67,10 @@ data "aws_iam_policy_document" "bedrock" {
     sid       = "BedrockInvokeModel"
     effect    = "Allow"
     actions   = ["bedrock:InvokeModel"]
-    resources = ["arn:aws:bedrock:${data.aws_region.current.region}::foundation-model/${var.bedrock_model_id}"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.id}:inference-profile/${var.bedrock_model_id}"
+      ]
   }
 }
 
