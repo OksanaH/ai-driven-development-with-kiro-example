@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan adapts the existing CLI/archive codebase into the new proof-of-concept **local web app**: a browser uploads a single file (`.txt` or one `.jpg`/`.jpeg`), a local HTTP server runs the pipeline over the uploaded bytes, and the frontend displays the returned `{ summary }` or `{ error, stage }`. The work proceeds in small, incremental TypeScript steps that each build on the previous one: first reshape the shared types and config, then rework each pipeline stage to operate on in-memory bytes (dropping all archive/zip and multi-image logic), swap Bedrock for a mock `Summarizer` behind an interface, and finally add the frontend asset and the HTTP server that wires everything together. Textract OCR (image path only) remains the sole real AWS call. Per the POC scope, there are no test tasks.
+This plan adapts the existing CLI/archive codebase into the new proof-of-concept **local web app**: a browser uploads a single file (`.txt` or one `.jpg`/`.jpeg`), a local HTTP server runs the pipeline over the uploaded bytes, and the frontend displays the returned `{ summary }` or `{ error, stage }`. The work proceeds in small, incremental TypeScript steps that each build on the previous one: first reshape the shared types and config, then rework each pipeline stage to operate on in-memory bytes (dropping all archive/zip and multi-image logic), define a `Summarizer` interface with a real `BedrockSummarizer` (default) and a `MockSummarizer` (offline/test) behind it, and finally add the frontend asset and the HTTP server that wires everything together. Textract OCR runs on the image path and Amazon Bedrock performs summarization. Per the POC scope, there are no test tasks.
 
 ## Tasks
 
@@ -48,9 +48,10 @@ This plan adapts the existing CLI/archive codebase into the new proof-of-concept
 - [ ] 6. Checkpoint - validate input handling and extraction
   - Ensure the project compiles after the types/config/input/text/OCR rework, ask the user if questions arise.
 
-- [ ] 7. Replace Bedrock summarization with a mock behind an interface
+- [ ] 7. Define the Summarizer interface with Bedrock and mock implementations
   - Rewrite `src/summarizer.ts` to define `interface Summarizer { summarize(text: string): Promise<string> }`
-  - Implement `class MockSummarizer implements Summarizer` producing a deterministic placeholder derived only from the input (e.g. `"Summary (N words): <first sentence>…"`), with no AWS call
+  - Implement `class BedrockSummarizer implements Summarizer` (default) constructed with a `BedrockRuntimeClient` and `modelId`, calling `InvokeModelCommand` with the Anthropic Messages API (`anthropic_version: "bedrock-2023-05-31"`, a `max_tokens` ceiling, a summarization system prompt, the text as one user turn), decoding the response and joining its `text` blocks; throw if the model returns an empty summary
+  - Implement `class MockSummarizer implements Summarizer` producing a deterministic placeholder derived only from the input (`"Summary (N words): <text>"`), with no AWS call, for offline runs and tests
   - Add `runSummarizer(text: string, summarizer: Summarizer, config: Config): Promise<Result<string, StageError>>` that guards empty/whitespace-only input ("no text to summarize", summarizer not invoked), truncates `text` to `maxSummarizerInputBytes` by UTF-8 byte length, and races the summarize call against `summarizerTimeoutMs` ("summarization failed" on error/timeout)
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
@@ -70,26 +71,27 @@ This plan adapts the existing CLI/archive codebase into the new proof-of-concept
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
 - [ ] 10. Implement the HTTP server as the primary entry point
-  - Create `src/server.ts` with `startServer(config: Config, textract: TextractClient): http.Server` built on Node's `http` module
+  - Create `src/server.ts` with `startServer(config: Config, textract: TextractClient, summarizer: Summarizer): http.Server` built on Node's `http` module
   - `GET /` responds `200 text/html` serving `public/index.html`
-  - `POST /api/summarize` parses the uploaded file (minimal multipart parsing or a small well-known dependency such as `busboy` — keep it simple), builds an `UploadedFile { filename, bytes }`, and runs `runPipeline` with a `TextractClient` and a `MockSummarizer`
+  - `POST /api/summarize` parses the uploaded file (minimal multipart parsing or a small well-known dependency such as `busboy` — keep it simple), builds an `UploadedFile { filename, bytes }`, and runs `runPipeline` with the `TextractClient` and injected `Summarizer`
+  - In the runnable entry point (`require.main === module`), construct a `TextractClient`, a `BedrockRuntimeClient`, and a `BedrockSummarizer(bedrock, config.bedrockModelId)`, then call `startServer`
   - Respond `200 application/json { "summary" }` on success and `4xx/5xx application/json { "error", "stage" }` on failure; a missing file maps to an input-handling error
   - Listen on `config.httpPort`
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
 - [ ] 11. Wire dependencies, scripts, and the CLI so everything compiles
-  - Update `package.json`: add a `"serve": "node dist/server.js"` script, point `main` (and `bin` if kept) appropriately, and add the multipart dependency if one is used; remove the `@aws-sdk/client-bedrock-runtime` and `adm-zip` dependencies that are no longer needed
+  - Update `package.json`: add a `"serve": "node dist/server.js"` script, point `main` (and `bin` if kept) appropriately, and add the multipart dependency if one is used; keep `@aws-sdk/client-bedrock-runtime` (used by `BedrockSummarizer`) alongside `@aws-sdk/client-textract`, and remove the `adm-zip` dependency that is no longer needed
   - Ensure `tsc` emits `dist/server.js`, and confirm `public/index.html` is available to the running server (served via a path relative to the project root)
-  - Update `src/cli.ts` so it still compiles: either adapt it to read a file from disk into an `UploadedFile` and call the new `runPipeline` with a `MockSummarizer`, or de-emphasize it as an optional secondary entry — but it must not reference removed types or Bedrock
+  - Update `src/cli.ts` so it still compiles: either adapt it to read a file from disk into an `UploadedFile` and call the new `runPipeline` with a `Summarizer` (a `MockSummarizer` keeps the CLI runnable offline), or de-emphasize it as an optional secondary entry — but it must not reference removed types
   - _Requirements: 6.1_
 
 - [ ] 12. Final checkpoint - build and manual run
-  - Build with `tsc`, start the server locally (`serve`), open the frontend, upload a sample `.txt`, and confirm the deterministic mock summary is displayed. Ask the user if questions arise.
+  - Build with `tsc`, start the server locally (`serve`), open the frontend, upload a sample `.txt`, and confirm a summary is displayed. With the default `BedrockSummarizer` this requires AWS credentials and Bedrock access; injecting `MockSummarizer` validates the flow offline. Ask the user if questions arise.
 
 ## Notes
 
 - This is a proof of concept; per the design, automated tests are out of scope and no test tasks are included.
-- The `.txt` path plus the mock `Summarizer` runs fully locally with no AWS involvement; Textract OCR on the JPEG path is the only real AWS call.
+- The default `BedrockSummarizer` calls Amazon Bedrock, so the text path requires AWS credentials; injecting `MockSummarizer` runs the text path fully locally. Textract OCR runs on the JPEG path and Bedrock summarizes the extracted text.
 - Each task references specific requirements for traceability.
 - Checkpoints ensure incremental validation as the codebase is reshaped from the previous CLI/archive implementation.
 - The flow is intentionally linear and straightforward, favoring readability over abstraction.

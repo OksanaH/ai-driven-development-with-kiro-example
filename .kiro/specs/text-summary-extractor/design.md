@@ -8,7 +8,7 @@ The file arrives at the server as in-memory bytes (an upload, not a filesystem p
 
 1. **Input handling** — classify the uploaded file by extension, validate it is present and its bytes are readable, and enforce the size limit. All rejections happen here, before any AWS call, so unsupported or oversized inputs never incur cost.
 2. **Text extraction** — for a text document, decode the bytes directly (no AWS). For a JPEG image, run the image bytes through Amazon Textract OCR (one call, with limited retry) to obtain the detected text.
-3. **Summarization** — send the extracted text (truncated to a configurable byte ceiling) to the `Summarizer` and return the generated summary. The `Summarizer` is a **mock** behind an interface that produces a deterministic placeholder summary locally; a real Amazon Bedrock implementation can be dropped in later without touching the callers.
+3. **Summarization** — send the extracted text (truncated to a configurable byte ceiling) to the `Summarizer` and return the generated summary. The `Summarizer` is defined behind an interface with two implementations: `BedrockSummarizer`, the default, which calls Amazon Bedrock's `InvokeModel`, and `MockSummarizer`, a local deterministic placeholder retained for offline runs and tests. Either can be dropped in without touching the callers.
 
 The design deliberately favors a straightforward, linear flow over abstraction, matching the "simple, readable TypeScript" guidance. Cost efficiency drives three concrete decisions: reject bad input before spending money, call Textract only for images (once, with limited retry), and truncate the summarizer input.
 
@@ -16,12 +16,12 @@ Because this is a proof of concept, automated tests are out of scope and are not
 
 ### Local run friction and AWS
 
-The `.txt` path plus the mock `Summarizer` runs **fully locally with no AWS involvement** — you can start the server, upload a text file, and see a summary with zero credentials. The **only** real AWS call in the whole application is Textract OCR on the JPEG path. Running the JPEG path therefore requires AWS Textract credentials and region; the text path does not.
+With the default `BedrockSummarizer`, summarization calls Amazon Bedrock, so both paths require AWS credentials and region: the text path calls Bedrock only, and the JPEG path calls Textract for OCR and then Bedrock for summarization. To run **fully locally with no AWS involvement** on the text path, swap in `MockSummarizer` (offline/test scenario), which produces a deterministic summary with zero credentials.
 
 ### AWS Services and SDK
 
-- **Amazon Textract** via `@aws-sdk/client-textract`. We use the synchronous `DetectDocumentTextCommand`, which accepts a single image as bytes and returns text blocks. It fits per-image, in-memory processing without needing S3 or async job polling, which keeps the POC simple and cheap. This is the only real AWS call in the application.
-- **Amazon Bedrock** is **not called** in this POC. The `Summarizer` is mocked (see below). The `Config` retains `bedrockModelId` / `awsRegion` so a real Bedrock implementation can be added later behind the same `Summarizer` interface.
+- **Amazon Textract** via `@aws-sdk/client-textract`. We use the synchronous `DetectDocumentTextCommand`, which accepts a single image as bytes and returns text blocks. It fits per-image, in-memory processing without needing S3 or async job polling, which keeps the POC simple and cheap. It runs only on the JPEG path.
+- **Amazon Bedrock** via `@aws-sdk/client-bedrock-runtime`. `BedrockSummarizer` calls the synchronous `InvokeModelCommand` with the Anthropic Claude Messages API (`anthropic_version: "bedrock-2023-05-31"`), sending the extracted text as a single user turn under a summarization system prompt and reading the concatenated text blocks of the response as the Summary. The `Config` supplies `bedrockModelId` / `awsRegion`. `MockSummarizer` remains available behind the same `Summarizer` interface for offline runs and tests.
 
 ## Architecture
 
@@ -32,11 +32,11 @@ flowchart TD
     S -->|uploaded bytes| P[Pipeline]
     P --> IH[InputHandler classify + validate bytes]
     IH -->|.txt| TR[TextReader decode bytes]
-    IH -->|.jpg/.jpeg| OCR[OcrExtractor Textract - only real AWS call]
+    IH -->|.jpg/.jpeg| OCR[OcrExtractor Textract OCR]
     IH -->|invalid / missing / oversized| E[StageError]
     TR --> XT[Extracted_Text]
     OCR --> XT
-    XT --> SUM[Summarizer interface -> MockSummarizer]
+    XT --> SUM[Summarizer interface -> BedrockSummarizer / MockSummarizer]
     SUM -->|ok| R["JSON { summary }"]
     E -->|fail| RE["JSON { error, stage }"]
     R --> U
@@ -56,7 +56,7 @@ The flow is a single pass. The `Web_Server` serves the static frontend on `GET /
 | `inputHandler.ts` | Classify the uploaded file by extension (`.txt`/`.jpg`/`.jpeg`) and enforce the size limit — operating on `{ filename, bytes }`, not a filesystem path. |
 | `textReader.ts` | Decode `.txt` bytes into `Extracted_Text` (from in-memory bytes, no path read). |
 | `ocrExtractor.ts` | Send a single image's bytes to Textract (one call + up to 2 retries on transient error) and return the detected text. |
-| `summarizer.ts` | Define the `Summarizer` interface and `MockSummarizer`; guard empty input, truncate to `Max_Summarizer_Input`, wrap in a timeout, return a deterministic placeholder summary. |
+| `summarizer.ts` | Define the `Summarizer` interface, `BedrockSummarizer` (real, calls Bedrock `InvokeModel`), and `MockSummarizer` (deterministic, offline); `runSummarizer` guards empty input, truncates to `Max_Summarizer_Input`, and wraps the call in a timeout. |
 | `pipeline.ts` | Orchestrate the stages over uploaded bytes and thread the `ProcessingResult` through. |
 | `types.ts` | Shared types (below). |
 
@@ -100,8 +100,14 @@ type ProcessingResult =
 Built on Node's built-in `http` module to keep dependencies minimal. Multipart form-data parsing is the one place a tiny dependency may earn its keep; the design prefers a minimal, well-known multipart parser (e.g. `busboy`) over hand-rolling multipart handling, or a plain single-field body if that proves simpler for the POC. The choice is an implementation detail — the endpoint contract below is what matters.
 
 ```typescript
-function startServer(config: Config, textract: TextractClient): http.Server;
+function startServer(
+  config: Config,
+  textract: TextractClient,
+  summarizer: Summarizer
+): http.Server;
 ```
+
+The `Summarizer` is injected so the entry point decides which implementation to use. The runnable entry point (`require.main === module`) constructs a `TextractClient`, a `BedrockRuntimeClient`, and a `BedrockSummarizer(bedrock, config.bedrockModelId)`, then calls `startServer`. Tests or offline runs can inject a `MockSummarizer` instead.
 
 Routes:
 
@@ -118,8 +124,8 @@ The server listens on `config.httpPort` (6.1).
 ```jsonc
 // POST /api/summarize  (multipart/form-data, one file field)
 
-// 200 OK
-{ "summary": "Summary (42 words): The quarterly report opens with..." }
+// 200 OK  (Bedrock-generated summary)
+{ "summary": "The quarterly report opens with a review of revenue growth..." }
 
 // error (e.g. 400 / 415 / 500)
 { "error": "Unsupported input type: detected extension \".pdf\". Only .txt, .jpg, and .jpeg are supported.", "stage": "input-handling" }
@@ -176,19 +182,28 @@ Behavior (single image, adapted from the previous archive logic):
 - If the detected text contains no non-whitespace character → "no text was extracted" error (4.3).
 - This is the only component that performs a real AWS call, and it runs only on the image path.
 
-### Summarizer (`summarizer.ts`) — interface + mock
+### Summarizer (`summarizer.ts`) — interface + Bedrock + mock
 
-The `Summarizer` is defined as an interface so the mock can be swapped for a real Bedrock implementation without changing any caller (5.3).
+The `Summarizer` is defined as an interface so the Bedrock and mock implementations are interchangeable without changing any caller (5.3). `BedrockSummarizer` is the default; `MockSummarizer` is retained for offline runs and tests.
 
 ```typescript
 interface Summarizer {
   summarize(text: string): Promise<string>;
 }
 
+// Default: calls Amazon Bedrock InvokeModel via the Anthropic Messages API (5.1).
+class BedrockSummarizer implements Summarizer {
+  constructor(client: BedrockRuntimeClient, modelId: string) { /* ... */ }
+  async summarize(text: string): Promise<string> { /* InvokeModelCommand */ }
+}
+
+// Offline/test: deterministic placeholder, no AWS call (5.4).
 class MockSummarizer implements Summarizer {
   async summarize(text: string): Promise<string> { /* deterministic placeholder */ }
 }
 ```
+
+`BedrockSummarizer.summarize` builds an Anthropic Messages request body (`anthropic_version: "bedrock-2023-05-31"`, a `max_tokens` ceiling, a summarization system prompt, and the extracted text as a single user turn), sends it via `InvokeModelCommand` with the configured `modelId`, decodes the JSON response body, concatenates the `text` blocks, and returns the trimmed result — throwing if the model returns an empty summary (5.1). It performs only the model call; the cost-safety guards live in `runSummarizer`.
 
 A thin stage function wraps the interface with the cost-safety guards so the interface stays honest even for the mock:
 
@@ -204,9 +219,9 @@ Behavior:
 
 - If `text` is empty or whitespace-only → "no text to summarize" error, without invoking the summarizer (5.2).
 - If the UTF-8 byte length of `text` exceeds `Max_Summarizer_Input`, truncate to that byte length before invoking (5.6).
-- Race `summarizer.summarize(...)` against the configured timeout; on error or timeout → "summarization failed" error and no summary (5.5). On success → the summary (5.1). The timeout wrapper is trivial for the mock but keeps the contract identical to a future networked implementation.
+- Race `summarizer.summarize(...)` against the configured timeout; on error or timeout → "summarization failed" error and no summary (5.5). On success → the summary (5.1). The timeout applies uniformly to both the networked Bedrock call and the mock.
 
-`MockSummarizer.summarize` produces a **deterministic** placeholder derived only from the input text and never calls AWS (5.4). For example: count the words, take the first sentence, and format as `"Summary (N words): <first sentence>…"`, or simply truncate the input to the first ~200 characters. The same input always yields the same output.
+`MockSummarizer.summarize` produces a **deterministic** placeholder derived only from the input text and never calls AWS (5.4): it counts the words and formats the trimmed text as `"Summary (N words): <text>"`. The same input always yields the same output. It is used for offline runs and tests, not the default server/Lambda entry points.
 
 ### Pipeline (`pipeline.ts`)
 
@@ -245,7 +260,7 @@ interface Config {
 - `maxInputSizeBytes` defaults to `10_485_760` (10 MB) and is clamped/validated to the inclusive range `1 .. 104_857_600` (100 MB) (2.1). Values outside the range fall back to the default.
 - `maxSummarizerInputBytes` and `summarizerTimeoutMs` are configurable (5.6, 5.5) with sensible POC defaults.
 - `httpPort` is the configurable port the server listens on, with a POC default (e.g. `3000`) (6.1).
-- `bedrockModelId` / `awsRegion` are retained so a real Bedrock `Summarizer` can be added later without a config change; the mock ignores them.
+- `bedrockModelId` / `awsRegion` configure the `BedrockSummarizer` and the Textract/Bedrock clients (default model `us.anthropic.claude-haiku-4-5-20251001-v1:0`, region `us-east-1`); `MockSummarizer` ignores them.
 - Configuration is resolved from environment variables with defaults; no config file is needed for the POC.
 
 ### UploadedFile
@@ -302,7 +317,7 @@ This is a proof of concept and automated testing is explicitly out of scope. No 
 
 Validation is performed manually:
 
-1. Start the server locally (`server.ts`) on the configured port.
-2. Open the frontend in a browser, upload a sample `.txt` file, submit, and confirm the deterministic mock summary is displayed. This path runs fully locally with no AWS credentials.
+1. Start the server locally (`server.ts`) on the configured port. With the default `BedrockSummarizer`, provide AWS credentials and region (Bedrock access to the configured model). To validate without AWS, inject `MockSummarizer` and use the text path.
+2. Open the frontend in a browser, upload a sample `.txt` file, submit, and confirm a summary is displayed. With `BedrockSummarizer` this is a real Bedrock-generated summary; with `MockSummarizer` it is the deterministic placeholder and runs with no AWS credentials.
 3. Upload an unsupported file and an oversized file and confirm the appropriate stage-tagged error is displayed.
-4. To exercise the JPEG path, provide AWS Textract credentials and region, upload a sample `.jpg`/`.jpeg`, and confirm the extracted text is summarized by the mock. This path is the only one that requires AWS.
+4. To exercise the JPEG path, provide AWS Textract and Bedrock credentials and region, upload a sample `.jpg`/`.jpeg`, and confirm the extracted text is summarized. This path calls Textract for OCR and then Bedrock for the summary.

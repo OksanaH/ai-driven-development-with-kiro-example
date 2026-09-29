@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Text Summary Extractor is a proof-of-concept web application that produces a concise summary from a single uploaded file. Through a simple browser-based frontend, a user uploads one file that is either a plain text file (`.txt`) or a single JPEG image (`.jpg`/`.jpeg`), submits it, and sees the resulting summary (or a descriptive error) displayed in the browser. For text files, the Application reads the text directly. For JPEG images, the Application first extracts text using Amazon Textract (a cost-effective managed OCR service), then generates the summary. Summarization is performed by a mock, locally running Summarizer that produces a deterministic placeholder summary; the Summarizer is kept behind an interface so a real Amazon Bedrock implementation can replace it later. The Application runs locally as an HTTP web server that serves the frontend and an upload endpoint. Because this is a proof of concept, automated tests are out of scope, and the implementation favors simple, readable TypeScript. Cost efficiency remains an explicit priority, so requirements favor selective service invocation, reasonable input-size limits, and avoidance of redundant AWS calls.
+The Text Summary Extractor is a proof-of-concept web application that produces a concise summary from a single uploaded file. Through a simple browser-based frontend, a user uploads one file that is either a plain text file (`.txt`) or a single JPEG image (`.jpg`/`.jpeg`), submits it, and sees the resulting summary (or a descriptive error) displayed in the browser. For text files, the Application reads the text directly. For JPEG images, the Application first extracts text using Amazon Textract (a cost-effective managed OCR service), then generates the summary. Summarization is performed by Amazon Bedrock through a Summarizer that is kept behind an interface; a local mock implementation is retained for offline runs and tests. The Application runs locally as an HTTP web server that serves the frontend and an upload endpoint. Because this is a proof of concept, automated tests are out of scope, and the implementation favors simple, readable TypeScript. Cost efficiency remains an explicit priority, so requirements favor selective service invocation, reasonable input-size limits, and avoidance of redundant AWS calls.
 
 ## Glossary
 
@@ -15,7 +15,7 @@ The Text Summary Extractor is a proof-of-concept web application that produces a
 - **Text_Document**: An Uploaded_File whose file extension is `.txt`, supplied directly to the Application.
 - **Image_File**: An Uploaded_File whose file extension is `.jpg` or `.jpeg`, holding text to be extracted.
 - **OCR_Service**: Amazon Textract, the managed AWS service used to extract text from Image_File contents.
-- **Summarizer**: The mock, locally running component used to generate a Summary from Extracted_Text, implemented behind an interface so a real Amazon Bedrock implementation can replace it later.
+- **Summarizer**: The component used to generate a Summary from Extracted_Text, implemented behind an interface. The default implementation calls Amazon Bedrock; a local mock implementation is retained for offline runs and tests.
 - **Extracted_Text**: The text obtained either directly from a Text_Document or from the Image_File via the OCR_Service.
 - **Summary**: The condensed text output produced by the Summarizer from the Extracted_Text.
 - **Max_Input_Size**: The configured upper bound, expressed in bytes, on the size of a single Uploaded_File that the Application accepts.
@@ -72,8 +72,8 @@ The Text Summary Extractor is a proof-of-concept web application that produces a
 
 1. WHEN Extracted_Text contains at least one non-whitespace character, THE Application SHALL send the Extracted_Text to the Summarizer to generate a Summary.
 2. IF Extracted_Text is empty or contains only whitespace, THEN THE Application SHALL NOT invoke the Summarizer and SHALL return an error indicating there is no text to summarize.
-3. THE Summarizer SHALL be implemented behind an interface such that the mock implementation can be replaced by a real Amazon Bedrock implementation without changing the Application components that invoke the Summarizer.
-4. WHEN the Summarizer is invoked, THE Summarizer SHALL produce a deterministic placeholder Summary derived from the Extracted_Text without invoking any external AWS service.
+3. THE Summarizer SHALL be implemented behind an interface such that the Amazon Bedrock implementation and the local mock implementation are interchangeable without changing the Application components that invoke the Summarizer.
+4. WHEN the Bedrock Summarizer is invoked, THE Summarizer SHALL call Amazon Bedrock's `InvokeModel` with the configured foundation model using the Anthropic Claude Messages API and SHALL return the model-generated Summary; WHEN the mock Summarizer is invoked, THE Summarizer SHALL produce a deterministic placeholder Summary derived from the Extracted_Text without invoking any external AWS service.
 5. IF the Summarizer returns an error or does not respond within a configurable timeout, THEN THE Application SHALL return a descriptive error indicating summarization failed and SHALL NOT output a Summary.
 6. WHERE the Extracted_Text byte length exceeds the configurable Max_Summarizer_Input value, THE Application SHALL truncate the Extracted_Text to the Max_Summarizer_Input value before invoking the Summarizer.
 
