@@ -133,6 +133,63 @@ function parseUpload(req: http.IncomingMessage): Promise<UploadedFile | undefine
 }
 
 /**
+ * Stream the summary to the client as Server-Sent Events (R3.1–R3.3, R3.5–R3.6).
+ *
+ * - Writes the SSE response headers immediately (200, text/event-stream).
+ * - Starts a `timeoutMs` timer; if no chunk arrives in time, emits an error
+ *   event and closes the response.
+ * - For each chunk from the `AsyncIterable`, clears the timer on the first
+ *   chunk and emits a `delta` event.
+ * - On exhaustion, emits a `done` event and closes the response.
+ * - On iterable error, emits an `error` event and closes the response.
+ */
+async function streamSummary(
+  res: http.ServerResponse,
+  summary: AsyncIterable<string>,
+  timeoutMs: number
+): Promise<void> {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Transfer-Encoding": "chunked",
+  });
+
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    res.write(
+      `data: ${JSON.stringify({ type: "error", error: "Summarization timed out.", stage: "summarization" })}\n\n`
+    );
+    res.end();
+  }, timeoutMs);
+
+  try {
+    for await (const chunk of summary) {
+      // If the timeout fired before the first chunk arrived, the response is
+      // already closed — stop iterating.
+      if (timedOut) break;
+      clearTimeout(timer);
+      res.write(`data: ${JSON.stringify({ type: "delta", text: chunk })}\n\n`);
+    }
+
+    if (!timedOut) {
+      clearTimeout(timer);
+      res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    if (!timedOut) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.write(
+        `data: ${JSON.stringify({ type: "error", error: message, stage: "summarization" })}\n\n`
+      );
+    }
+  } finally {
+    res.end();
+  }
+}
+
+/**
  * Handle `POST /api/summarize`: parse the upload, run the pipeline, and respond
  * with JSON (6.2, 6.3, 6.4).
  */
@@ -159,7 +216,7 @@ async function handleSummarize(
   const result = await runPipeline(file, config, textract, summarizer);
 
   if (result.ok) {
-    sendJson(res, 200, { summary: result.summary });
+    await streamSummary(res, result.summary, config.summarizerTimeoutMs);
     return;
   }
 

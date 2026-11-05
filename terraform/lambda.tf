@@ -34,6 +34,7 @@ resource "aws_lambda_function" "web_app" {
 resource "aws_lambda_function_url" "web_app" {
   function_name      = aws_lambda_function.web_app.function_name
   authorization_type = "NONE"
+  invoke_mode        = "RESPONSE_STREAM"
 
   cors {
     allow_origins = ["*"]

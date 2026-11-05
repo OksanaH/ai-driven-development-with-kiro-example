@@ -28,7 +28,7 @@ Browser ──POST /api/summarize──> Server ──> Pipeline
 | Text extraction | `src/textReader.ts`, `src/ocrExtractor.ts` | 422 |
 | Summarization | `src/summarizer.ts` | 500 |
 
-On success the endpoint returns `{ "summary": "..." }`; on failure it returns `{ "error": "...", "stage": "..." }`.
+On success the server streams the summary progressively to the browser via Server-Sent Events (SSE), so text appears as the model generates it rather than waiting for the full response. On failure it returns `{ "error": "...", "stage": "..." }`.
 
 ## Project structure
 

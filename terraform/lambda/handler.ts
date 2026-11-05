@@ -27,6 +27,24 @@ import { runPipeline } from "../../src/pipeline";
 import { BedrockSummarizer, type Summarizer } from "../../src/summarizer";
 import type { Stage, UploadedFile } from "../../src/types";
 
+// Ambient declaration for the `awslambda` global injected by the Lambda Node 20
+// runtime. Not available as an npm package — declared inline per Design §3 / Option A.
+declare const awslambda: {
+  streamifyResponse(
+    handler: (
+      event: FunctionUrlEvent,
+      responseStream: NodeJS.WritableStream,
+      context: unknown
+    ) => Promise<void>
+  ): unknown;
+  HttpResponseStream: {
+    from(
+      responseStream: NodeJS.WritableStream,
+      init: { statusCode: number; headers: Record<string, string> }
+    ): NodeJS.WritableStream;
+  };
+};
+
 /**
  * Minimal Lambda Function URL event shape (payload format version 2.0). Only
  * the fields this handler needs are declared.
@@ -40,14 +58,6 @@ interface FunctionUrlEvent {
   };
   rawPath?: string;
   headers?: Record<string, string | undefined>;
-  body?: string;
-  isBase64Encoded?: boolean;
-}
-
-/** Lambda Function URL / API Gateway v2 response shape. */
-interface FunctionUrlResponse {
-  statusCode: number;
-  headers?: Record<string, string>;
   body?: string;
   isBase64Encoded?: boolean;
 }
@@ -82,15 +92,6 @@ function statusForStage(stage: Stage): number {
   }
 }
 
-/** Build a JSON Function URL response. */
-function jsonResponse(status: number, body: unknown): FunctionUrlResponse {
-  return {
-    statusCode: status,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  };
-}
-
 /**
  * Resolve the path to the bundled `index.html`.
  *
@@ -108,21 +109,30 @@ function resolveIndexHtmlPath(): string | undefined {
 }
 
 /** Serve the static frontend page on `GET /` (6.1). */
-function serveIndex(): FunctionUrlResponse {
+function serveIndex(responseStream: NodeJS.WritableStream): void {
   const indexPath = resolveIndexHtmlPath();
   if (indexPath === undefined) {
-    return jsonResponse(500, {
-      error: "Frontend asset index.html was not found.",
-      stage: "input-handling",
+    const stream = awslambda.HttpResponseStream.from(responseStream, {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
     });
+    stream.write(
+      JSON.stringify({
+        error: "Frontend asset index.html was not found.",
+        stage: "input-handling",
+      })
+    );
+    stream.end();
+    return;
   }
 
   const html = fs.readFileSync(indexPath, "utf8");
-  return {
+  const stream = awslambda.HttpResponseStream.from(responseStream, {
     statusCode: 200,
     headers: { "Content-Type": "text/html; charset=utf-8" },
-    body: html,
-  };
+  });
+  stream.write(html);
+  stream.end();
 }
 
 /**
@@ -181,20 +191,90 @@ function parseUpload(event: FunctionUrlEvent): Promise<UploadedFile | undefined>
 }
 
 /**
- * Handle `POST /api/summarize`: parse the upload, run the pipeline, and respond
- * with JSON (6.2, 6.3, 6.4).
+ * Stream the summary to the client as Server-Sent Events (AC-1–AC-6).
+ *
+ * - Attaches SSE headers via `awslambda.HttpResponseStream.from` (AC-6).
+ * - Starts a `timeoutMs` timer; if no chunk arrives in time, emits a timeout
+ *   error event and closes the stream (AC-5).
+ * - For each chunk from the `AsyncIterable`, clears the timer on the first
+ *   chunk and emits a `delta` event (AC-2).
+ * - On exhaustion, emits a `done` event and closes the stream (AC-3).
+ * - On iterable error, emits an `error` event and closes the stream (AC-4).
+ */
+async function streamSummary(
+  stream: NodeJS.WritableStream,
+  summary: AsyncIterable<string>,
+  timeoutMs: number
+): Promise<void> {
+  const sseStream = awslambda.HttpResponseStream.from(stream, {
+    statusCode: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    sseStream.write(
+      `data: ${JSON.stringify({ type: "error", error: "Summarization timed out.", stage: "summarization" })}\n\n`
+    );
+    sseStream.end();
+  }, timeoutMs);
+
+  try {
+    for await (const chunk of summary) {
+      // If the timeout fired before the first chunk arrived, the stream is
+      // already closed — stop iterating.
+      if (timedOut) break;
+      clearTimeout(timer);
+      sseStream.write(`data: ${JSON.stringify({ type: "delta", text: chunk })}\n\n`);
+    }
+
+    if (!timedOut) {
+      clearTimeout(timer);
+      sseStream.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    if (!timedOut) {
+      const message = err instanceof Error ? err.message : String(err);
+      sseStream.write(
+        `data: ${JSON.stringify({ type: "error", error: message, stage: "summarization" })}\n\n`
+      );
+    }
+  } finally {
+    sseStream.end();
+  }
+}
+
+/**
+ * Handle `POST /api/summarize`: parse the upload, run the pipeline, and stream
+ * the summary as SSE — or write a JSON error body — directly to `stream`
+ * (6.2, 6.3, 6.4, AC-1–AC-6).
  */
 async function handleSummarize(
-  event: FunctionUrlEvent
-): Promise<FunctionUrlResponse> {
+  event: FunctionUrlEvent,
+  stream: NodeJS.WritableStream
+): Promise<void> {
   let file: UploadedFile | undefined;
   try {
     file = await parseUpload(event);
   } catch {
-    return jsonResponse(400, {
-      error: "The upload could not be parsed as multipart/form-data.",
-      stage: "input-handling",
+    const errStream = awslambda.HttpResponseStream.from(stream, {
+      statusCode: 400,
+      headers: { "Content-Type": "application/json" },
     });
+    errStream.write(
+      JSON.stringify({
+        error: "The upload could not be parsed as multipart/form-data.",
+        stage: "input-handling",
+      })
+    );
+    errStream.end();
+    return;
   }
 
   // If no file is present, pass `undefined` so the pipeline's input handler
@@ -202,41 +282,68 @@ async function handleSummarize(
   const result = await runPipeline(file, config, textract, summarizer);
 
   if (result.ok) {
-    return jsonResponse(200, { summary: result.summary });
+    await streamSummary(stream, result.summary, config.summarizerTimeoutMs);
+    return;
   }
 
-  return jsonResponse(statusForStage(result.error.stage), {
-    error: result.error.message,
-    stage: result.error.stage,
+  const status = statusForStage(result.error.stage);
+  const errStream = awslambda.HttpResponseStream.from(stream, {
+    statusCode: status,
+    headers: { "Content-Type": "application/json" },
   });
+  errStream.write(
+    JSON.stringify({
+      error: result.error.message,
+      stage: result.error.stage,
+    })
+  );
+  errStream.end();
 }
 
 /**
- * Lambda Function URL entry point. Routes GET `/` to the frontend and
- * POST `/api/summarize` to the pipeline; anything else is a 404.
+ * Inner router passed to `awslambda.streamifyResponse` (Design §4.2, AC-7, AC-8).
+ *
+ * Routes every request to the appropriate handler, writing directly to the
+ * Lambda response stream rather than returning a response object:
+ *
+ * - `GET /` and `GET /index.html` → serve the frontend HTML via the stream.
+ * - `POST /api/summarize` → delegate to `handleSummarize` for SSE streaming.
+ * - Anything else → write a JSON 404 body and close the stream.
+ *
+ * Non-streaming paths (GET /, 404) write their full body in a single `write`
+ * call and call `stream.end()` immediately, so the behaviour is
+ * indistinguishable from a normal Lambda response.
  */
-export async function handler(
-  event: FunctionUrlEvent
-): Promise<FunctionUrlResponse> {
+async function routeRequest(
+  event: FunctionUrlEvent,
+  responseStream: NodeJS.WritableStream,
+  _context: unknown
+): Promise<void> {
   const method = event.requestContext?.http?.method ?? "GET";
-  const rawPath =
-    event.requestContext?.http?.path ?? event.rawPath ?? "/";
+  const rawPath = event.requestContext?.http?.path ?? event.rawPath ?? "/";
   const pathname = rawPath.split("?")[0];
 
   if (method === "GET" && (pathname === "/" || pathname === "/index.html")) {
-    return serveIndex();
+    serveIndex(responseStream);
+    return;
   }
 
   if (method === "POST" && pathname === "/api/summarize") {
-    try {
-      return await handleSummarize(event);
-    } catch {
-      return jsonResponse(500, {
-        error: "An unexpected error occurred.",
-        stage: "summarization",
-      });
-    }
+    await handleSummarize(event, responseStream);
+    return;
   }
 
-  return jsonResponse(404, { error: "Not found.", stage: "input-handling" });
+  const stream = awslambda.HttpResponseStream.from(responseStream, {
+    statusCode: 404,
+    headers: { "Content-Type": "application/json" },
+  });
+  stream.write(JSON.stringify({ error: "Not found.", stage: "input-handling" }));
+  stream.end();
 }
+
+/**
+ * Lambda Function URL entry point. Uses `awslambda.streamifyResponse` so that
+ * Lambda streams each SSE chunk to the client as it is written, rather than
+ * buffering the entire response (AC-8, Design §4.4).
+ */
+export const handler = awslambda.streamifyResponse(routeRequest);

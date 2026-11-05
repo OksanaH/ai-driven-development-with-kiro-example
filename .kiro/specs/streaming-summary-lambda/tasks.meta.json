@@ -1,0 +1,129 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Add the `awslambda` ambient TypeScript declaration": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894056700
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894063126
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894214537
+      }
+    ],
+    "2. Add the `streamSummary` helper function": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894056996
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894217009
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894259594
+      }
+    ],
+    "3. Refactor `handleSummarize` to write to a stream": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894057172
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894262412
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894296194
+      }
+    ],
+    "4. Add the `routeRequest` inner function": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894057319
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894298890
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894461155
+      }
+    ],
+    "5. Replace the exported `handler` with `awslambda.streamifyResponse(routeRequest)`": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894057466
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894466916
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894495572
+      }
+    ],
+    "6. Remove or inline the now-unused `FunctionUrlResponse` interface and `jsonResponse` helper": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894057622
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894498420
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894587959
+      }
+    ],
+    "7. Build and verify the TypeScript compiles cleanly": [
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894057774
+      },
+      {
+        "executionId": "a2a5c7ec-2c86-4078-8110-93332585f44b",
+        "chatSessionId": "sess_3aaaefa0-9f32-4565-9c74-1d64048051a0",
+        "timestamp": 1793894590771
+      },
+      {
+        "executionId": "9fa8c6ff-75e1-42d0-a465-7276adcd7a51",
+        "chatSessionId": "sess_d460f047-0d50-43b2-9b8f-4aa644585e0a",
+        "timestamp": 1793895006066
+      },
+      {
+        "executionId": "435bbc50-d56d-4a49-a0cc-0ae312f34f84",
+        "chatSessionId": "sess_d7ed84d1-a66c-49f6-a3c9-c4c28d9590cd",
+        "timestamp": 1793895083667
+      }
+    ]
+  }
+}

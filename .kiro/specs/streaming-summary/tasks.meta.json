@@ -1,0 +1,192 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Update `ProcessingResult` to carry an `AsyncIterable<string>` summary": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887194277
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887201533
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887219851
+      }
+    ],
+    "2. Update the `Summarizer` interface and extract `truncateToBytes`": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887194450
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887222375
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887669897
+      }
+    ],
+    "3. Rewrite `BedrockSummarizer` to stream deltas from Bedrock": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887194669
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887676672
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887946984
+      }
+    ],
+    "4. Rewrite `MockSummarizer` to yield word-by-word with a delay": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887194819
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887949999
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887975956
+      }
+    ],
+    "5. Remove `runSummarizer` from `src/summarizer.ts`": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195038
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887979096
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888246738
+      }
+    ],
+    "6. Update `runPipeline` to forward the `AsyncIterable` without buffering": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195189
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888249811
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888370601
+      }
+    ],
+    "7. Add `streamSummary` to `src/server.ts`": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195334
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888377021
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888451485
+      }
+    ],
+    "8. Update `handleSummarize` in `src/server.ts` to call `streamSummary`": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195576
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888460830
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888501473
+      }
+    ],
+    "9. Rewrite the frontend fetch handler in `public/index.html` to read the SSE stream": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195735
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888506926
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888546279
+      }
+    ],
+    "10. Update the README to mention streaming": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887195897
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888549203
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888569749
+      }
+    ],
+    "11. Build and verify there are no TypeScript errors": [
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793887196095
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888572873
+      },
+      {
+        "executionId": "3d163da3-1554-483c-b948-c32152f83763",
+        "chatSessionId": "sess_82b54b62-510b-4c81-abc1-2c69d79ded45",
+        "timestamp": 1793888614965
+      }
+    ]
+  }
+}

@@ -38,5 +38,5 @@ export type InputClassification =
 
 /** Final result threaded out of the pipeline. */
 export type ProcessingResult =
-  | { ok: true; summary: string }
+  | { ok: true; summary: AsyncIterable<string> }
   | { ok: false; error: StageError };
