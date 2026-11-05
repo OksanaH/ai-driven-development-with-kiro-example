@@ -64,13 +64,18 @@ data "aws_iam_policy_document" "bedrock" {
   count = var.grant_bedrock_invoke ? 1 : 0
 
   statement {
-    sid       = "BedrockInvokeModel"
-    effect    = "Allow"
-    actions   = ["bedrock:InvokeModel"]
+    sid    = "BedrockInvokeModel"
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+    ]
     resources = [
+      # Base foundation model (all regions)
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
-      "arn:aws:bedrock:*:${data.aws_caller_identity.current.id}:inference-profile/${var.bedrock_model_id}"
-      ]
+      # Cross-region inference profile used by the app (us.* prefix)
+      "arn:aws:bedrock:*:${data.aws_caller_identity.current.id}:inference-profile/${var.bedrock_model_id}",
+    ]
   }
 }
 

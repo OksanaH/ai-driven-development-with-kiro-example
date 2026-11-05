@@ -189,25 +189,79 @@
           const response = await fetch("/api/summarize", {
             method: "POST",
             body: formData,
+            headers: { Accept: "text/event-stream" },
           });
 
-          let data;
-          try {
-            data = await response.json();
-          } catch {
-            data = null;
+          // Non-SSE responses are JSON — either a success summary or an error.
+          if (!response.headers.get("content-type")?.startsWith("text/event-stream")) {
+            let data = null;
+            try {
+              data = await response.json();
+            } catch {
+              // ignore parse failure
+            }
+            if (data && typeof data.summary === "string") {
+              // Lambda returns the full summary as JSON (no streaming).
+              show(resultEl);
+              summaryTextEl.textContent = data.summary;
+            } else if (data && typeof data.error === "string") {
+              const prefix = data.stage ? "[" + data.stage + "] " : "";
+              showError(prefix + data.error);
+            } else {
+              showError(
+                "Something went wrong (HTTP " + response.status + "). Please try again."
+              );
+            }
+            return;
           }
 
-          if (response.ok && data && typeof data.summary === "string") {
-            summaryTextEl.textContent = data.summary;
-            show(resultEl);
-          } else if (data && typeof data.error === "string") {
-            const prefix = data.stage ? "[" + data.stage + "] " : "";
-            showError(prefix + data.error);
-          } else {
-            showError(
-              "Something went wrong (HTTP " + response.status + "). Please try again."
-            );
+          // Read the SSE stream incrementally
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let summaryStarted = false;
+          let done = false;
+
+          while (!done) {
+            const { done: streamDone, value } = await reader.read();
+            if (streamDone) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split("\n");
+            // Keep the last (potentially incomplete) line in the buffer
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+
+              let sseEvent;
+              try {
+                sseEvent = JSON.parse(line.slice(6));
+              } catch {
+                continue;
+              }
+
+              if (sseEvent.type === "delta") {
+                if (!summaryStarted) {
+                  show(resultEl);
+                  summaryStarted = true;
+                }
+                summaryTextEl.textContent += sseEvent.text;
+              } else if (sseEvent.type === "done") {
+                done = true;
+                break;
+              } else if (sseEvent.type === "error") {
+                if (summaryStarted) {
+                  hide(resultEl);
+                  summaryTextEl.textContent = "";
+                }
+                const prefix = sseEvent.stage ? "[" + sseEvent.stage + "] " : "";
+                showError(prefix + sseEvent.error);
+                done = true;
+                break;
+              }
+            }
           }
         } catch (err) {
           showError(

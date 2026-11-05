@@ -16,8 +16,9 @@ import type { ProcessingResult, UploadedFile } from "./types";
 
 import { classifyAndValidate } from "./inputHandler";
 import { extractFromImage } from "./ocrExtractor";
-import { runSummarizer, Summarizer } from "./summarizer";
+import { Summarizer } from "./summarizer";
 import { readTextBytes } from "./textReader";
+import { truncateToBytes } from "./utils";
 
 /**
  * Run the full pipeline for a single uploaded file.
@@ -62,10 +63,18 @@ export async function runPipeline(
   }
 
   // Stage 3: summarization.
-  const summarized = await runSummarizer(extractedText, summarizer, config);
-  if (!summarized.ok) {
-    return { ok: false, error: summarized.error };
+  // Empty-input guard (R2.2): reject blank/whitespace-only extracted text.
+  if (extractedText.trim().length === 0) {
+    return {
+      ok: false,
+      error: { stage: "summarization", message: "There is no text to summarize." },
+    };
   }
 
-  return { ok: true, summary: summarized.value };
+  // Truncate to the byte ceiling before handing off to the summarizer (R2.3).
+  const input = truncateToBytes(extractedText, config.maxSummarizerInputBytes);
+
+  // Forward the AsyncIterable directly — do not buffer or await (R2.4).
+  const summary = summarizer.summarize(input);
+  return { ok: true, summary };
 }
